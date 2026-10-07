@@ -12,5 +12,8 @@
 - In Perl-Einzeilern `{ ... }` für die FHEM-Kommandozeile **jedes `;` zu `;;` verdoppeln**
   (auch innerhalb von `q{}` und Regex), sonst zerlegt FHEM den Befehl an den Semikolons
   ("Unknown command {", "Unknown command my"). In der `fhem.cfg` selbst gilt dasselbe.
+- Das gilt auch für `;` in Regex-Mustern und Ersetzungstexten (`s/...;;/...;;/`). Jeden Befehl vor
+  der Ausgabe in eine Scratchpad-Datei schreiben und prüfen, dass `grep -oP '(?<!;);(?!;)'`
+  nichts findet und die Klammern ausgeglichen sind.
 - Am Ende eines Änderungsbefehls immer `save` als eigenen Befehl nennen.
 - Zusätzlich einen kurzen Prüfbefehl angeben, z. B. `list <dev> <reading>`.
