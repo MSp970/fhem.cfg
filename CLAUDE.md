@@ -9,7 +9,8 @@
   `$defs{<dev>}{DEF}` per Regex ersetzt und mit `CommandModify(undef,"<dev> $d")` neu setzt.
   Er darf keine `#`-Kommentare enthalten (die Kommandozeile entfernt Zeilenumbrüche) und muss bei
   nicht gefundenem Muster eine Meldung liefern statt zu ändern.
-- Im Befehl `;` nur innerhalb von `{ }` einfach lassen. In der `fhem.cfg` selbst müssen `;`
-  zu `;;` verdoppelt werden. Dann extra darauf hinweisen.
+- In Perl-Einzeilern `{ ... }` für die FHEM-Kommandozeile **jedes `;` zu `;;` verdoppeln**
+  (auch innerhalb von `q{}` und Regex), sonst zerlegt FHEM den Befehl an den Semikolons
+  ("Unknown command {", "Unknown command my"). In der `fhem.cfg` selbst gilt dasselbe.
 - Am Ende eines Änderungsbefehls immer `save` als eigenen Befehl nennen.
 - Zusätzlich einen kurzen Prüfbefehl angeben, z. B. `list <dev> <reading>`.
