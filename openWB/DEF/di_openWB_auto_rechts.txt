@@ -1,0 +1,646 @@
+(
+{
+my $now  = time();
+my $DEV  = "di_openWB_auto_rechts";
+my $CTL  = "openWB_Garage_rechts_Control";
+my $WB   = "OpenWB_Garage_rechts";
+my $CMD  = "openWB_Garage_rechts_PV_cmd";
+my $FC   = "DOIF_PV_forecast_Batterie_laden";
+my $hash = $defs{$DEV};
+
+my $sr = sub {
+my ($r,$v) = @_;
+readingsSingleUpdate($hash,$r,$v,1) if(ReadingsVal($DEV,$r,"") ne $v);
+};
+my $rn = sub {
+my ($r,$d) = @_;
+return ReadingsNum($DEV,$r,$d);
+};
+my $par = sub {
+my ($r,$d) = @_;
+return ReadingsNum($CTL,$r,$d);
+};
+
+## ---------- Parameter (Readings in openWB_Garage_rechts_Control, sonst Default)
+my $MIN_A     = $par->("minCurrent",6);
+my $MAX_A1    = $par->("maxCurrent",32);
+my $MAX_A3    = $par->("maxCurrent3p",17);
+my $FEED_MAX  = $par->("feedTargetMaxW",2000);
+my $E_HI      = $par->("fcRestHighKwh",50);
+my $E_LO      = $par->("fcRestLowKwh",25);
+my $BEZUG_F   = $par->("bezugFaktor",1.5);
+my $BEZUG_MIN = $par->("bezugSchwelleW",50);
+my $UP_SEC    = $par->("upDelaySec",5);
+my $DN_SEC    = $par->("dnHoldSec",3);
+my $PV_ON     = $par->("pvMinOnW",1500);
+my $PV_ON_SEC = $par->("pvMinOnSec",30);
+my $PV_MAX    = $par->("pvPlausMaxW",60000);
+my $PV_HYST   = $par->("pvMinHystW",300);
+my $PV_DELAY  = $par->("pvMinDelaySec",60);
+my $P3_W      = $par->("phase3OnW",7000);
+my $P3_SEC    = $par->("phase3OnSec",900);
+my $P1_SEC    = $par->("phase1BezugSec",20);
+my $SW_WIN    = $par->("phaseSwitchWinSec",300);
+my $SW_SETTLE = $par->("phaseSwitchSettleSec",15);
+my $FOLLOW_F  = $par->("upFollowFaktor",0.8);
+my $SW_MAX    = $par->("phaseSwitchMaxDay",4);
+my $FULL_SEC  = $par->("carFullSec",180);
+my $FULL_W    = $par->("carFullW",100);
+my $PLUG_WAIT = $par->("plugWaitSec",5);
+my $RESEND    = $par->("modeResendSec",30);
+my $MHOLD     = $par->("manualHoldSec",15);
+my $PAUSE     = "openWB_Garage_rechts_Auto_Pause";
+my $STOP_W    = $par->("stopBezugW",100);
+my $STOP_SEC  = $par->("stopBezugSec",90);
+my $RST_SEC   = $par->("restartMinSec",300);
+
+## ---------- Tageszaehler Phasenumschaltungen
+my @lt  = localtime($now);
+my $ymd = sprintf("%04d%02d%02d",$lt[5]+1900,$lt[4]+1,$lt[3]);
+my $hour = $lt[2];
+my $min  = $lt[1];
+if(ReadingsVal($DEV,"sw_day","") ne $ymd)
+{
+$sr->("sw_day",$ymd);
+$sr->("sw_count",0);
+}
+my $sw_count = $rn->("sw_count",0);
+
+## ---------- Messwerte
+my $grid  = ReadingsNum("HA_SDM630M_Nergie","Power_Sum__W1",0);
+my $feed  = -$grid;
+my $pv    = ReadingsNum("GoodWe_Garage_Haus_West_5877","PV_A9_Total_Power",0);
+## Plausibilitaet: Modbus-Fehlwerte (0xFFFFFFFF) oder negative Werte -> 0
+if($pv < 0 || $pv > $PV_MAX)
+{
+$sr->("pv_invalid",int($pv));
+readingsSingleUpdate($hash,"pv_invalid_t",int($now),0);
+$pv = 0;
+}
+my $power = ReadingsNum($WB,"Ladeleistung_gesamt",0);
+my $plug  = (ReadingsVal($WB,"Ladepunkt_plug_state","False") eq "True") ? 1 : 0;
+my $cm    = ReadingsVal($WB,"Ladepunkt_chargemode","");
+my $cmdSt = ReadingsVal($CMD,"state","");
+my $manual = ($cm =~ /^(stop|standby|eco_charging|target_charging)$/) ? 1 : 0;
+
+fhem("setreading $CTL power ".sprintf("%.1f",$power/1000));
+$sr->("grid",int($grid));
+$sr->("pv",int($pv));
+$sr->("ev_power",int($power));
+$sr->("cm_raw",$cm);
+
+my $f15 = $rn->("feed15",0);
+my $f15t = $rn->("feed15_t",0);
+my $fdt = ($f15t > 0) ? $now - $f15t : 0;
+$fdt = 0 if($fdt < 0 || $fdt > 60);
+my $bl15 = 0;
+foreach my $b15 (split(/,/,"GoodWe_Garage_Haus_West_5877,GoodWe_Haus_Ost_Mitte_5876,GoodWe"))
+{
+next if(!defined($defs{$b15}));
+my $p15 = ReadingsNum($b15,"Power_Battery",0);
+$bl15 += -$p15 if($p15 < 0);
+}
+$f15 = $f15 + ($feed + $power + $bl15 - $f15) * $fdt / $par->("phase3StartMittelSec",900);
+readingsSingleUpdate($hash,"feed15",int($f15),0);
+readingsSingleUpdate($hash,"feed15_t",$now,0);
+my $VW_S = $par->("sofortStartW",1500);
+my $VW_3 = $par->("phase3StartW",5000);
+my $VW_H = $par->("vorwahlHystW",300);
+my $vw_alt = ReadingsVal($DEV,"vorwahl","pvAuto");
+my $vw = "pvAuto";
+if($f15 >= $VW_3 - (($vw_alt eq "sofortMax") ? $VW_H : 0) && $sw_count < $SW_MAX)
+{
+$vw = "sofortMax";
+}
+elsif($f15 >= $VW_S + (($vw_alt eq "pvAuto") ? $VW_H : 0))
+{
+$vw = "sofort1";
+}
+$sr->("vorwahl",$vw);
+## ---------- Rest-Tagesenergie Prognose + Einspeiseziel
+my $rest = 0;
+for(my $i = $hour; $i <= 23; $i++)
+{
+my $v = ReadingsNum($FC,sprintf("pv_fc_today_%02d",$i),0);
+$v = $v * (60 - $min) / 60 if($i == $hour);
+$rest += $v;
+}
+my $ziel;
+if($rest >= $E_HI)
+{
+$ziel = $FEED_MAX;
+}
+elsif($rest <= $E_LO)
+{
+$ziel = 0;
+}
+else
+{
+$ziel = ($rest - $E_LO) / ($E_HI - $E_LO) * $FEED_MAX;
+}
+$ziel = int($ziel + 0.5);
+$sr->("fc_rest_kwh",sprintf("%.1f",$rest));
+$sr->("feed_ziel",$ziel);
+
+my $r_switch = 0;
+my $r_aktiv = 0;
+## ---------- Helfer
+## Schutz: bei Pause-Schalter oder Stop/Fremdmodus an der WB nie eingreifen (auch nicht mitten im Zyklus)
+my $blocked = sub {
+return 1 if(ReadingsVal($PAUSE,"state","off") eq "on");
+return 1 if(ReadingsVal($WB,"Ladepunkt_chargemode","") =~ /^(stop|standby|eco_charging|target_charging)$/);
+return 1 if(($now - ReadingsNum($DEV,"manual_t",0)) < $MHOLD);
+return 0;
+};
+my $setMode = sub {
+my ($m,$force) = @_;
+return if($blocked->());
+return if(!$force && ReadingsVal($CMD,"state","") eq $m);
+fhem("set $CMD $m");
+$sr->("mode_sent",$m);
+readingsSingleUpdate($hash,"mode_sent_t",int($now),0);
+};
+my $setA = sub {
+my ($a) = @_;
+return if($blocked->());
+$a = int($a);
+$sr->("targetA",$a);
+if($a != ReadingsNum($CTL,"chargecurrent",-1)
+|| ($now - $rn->("a_sent_t",0)) >= 60)
+{
+fhem("set $CTL chargecurrent $a");
+readingsSingleUpdate($hash,"a_sent_t",int($now),0);
+}
+};
+my $resetAll = sub {
+$sr->("plugged",0);
+$sr->("car_full",0);
+$sr->("phase_mode",1);
+$sr->("targetA",0);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$sr->("low_since",0);
+$sr->("sofort_since",0);
+$sr->("run_since",0);
+$sr->("pv_ok",0);
+$sr->("pv_low_since",0);
+$sr->("pv_high_since",0);
+$sr->("bezug_stop_since",0);
+$sr->("stop_t",0);
+$sr->("pv_stop_w",0);
+
+};
+
+## ---------- Batterieschutz-Wunsch (A9: di_Batterie_Entladewaechter, S9: Info)
+my $sofort_aktiv = ($cmdSt =~ /^sofort/) ? 1 : 0;
+my $wunsch = ($plug && !$manual && ($power > 50 || $sofort_aktiv)) ? 1 : 0;
+$wunsch = 1 if($power > 50);
+$sr->("bat_entl_wunsch",$wunsch);
+
+## ---------- Pause-Schalter / manueller Stopp bzw. Fremdmodus an der WB -> Finger weg (Stop bleibt Stop)
+if(ReadingsVal($PAUSE,"state","off") eq "on")
+{
+$sr->("active_mode","pausiert");
+$sr->("plugged",$plug);
+return;
+}
+if($manual)
+{
+readingsSingleUpdate($hash,"manual_t",int($now),0);
+$sr->("sofort_since",0);
+$sr->("phase_mode",1);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$sr->("low_since",0);
+$sr->("bezug_stop_since",0);
+$sr->("pv_ok",0);
+$sr->("pv_high_since",0);
+$sr->("active_mode","manual_".$cm);
+$sr->("plugged",$plug);
+return;
+}
+if(($now - $rn->("manual_t",0)) < $MHOLD)
+{
+$sr->("active_mode","manual_nachlauf");
+return;
+}
+
+## ---------- kein EV gesteckt -> pv1
+if(!$plug)
+{
+$setMode->($vw);
+fhem("set $CTL chargecurrent $MIN_A") if($vw ne "pvAuto" && ReadingsNum($CTL,"chargecurrent",-1) != $MIN_A);
+$resetAll->();
+$sr->("active_mode","unplugged");
+return;
+}
+
+## ---------- EV neu gesteckt
+if(!$rn->("plugged",0))
+{
+$resetAll->();
+$sr->("plugged",1);
+$sr->("pv_ok",1) if($vw ne "pvAuto" && $pv >= $PV_ON);
+$sr->("plug_t",int($now));
+}
+
+## ---------- EV voll -> pv1 bis zum Abstecken
+if($rn->("car_full",0))
+{
+$setMode->("pvAuto");
+$sr->("active_mode","car_full");
+return;
+}
+
+if(($now - $rn->("plug_t",$now)) < $PLUG_WAIT)
+{
+$sr->("active_mode","plug_in_wait");
+return;
+}
+
+## ---------- PV-Mindestleistung (Hysterese + Einschaltverzoegerung) + Wiederanlaufsperre nach Bezug-Stopp
+my $pv_ok  = $rn->("pv_ok",0);
+my $stop_t = $rn->("stop_t",0);
+if(!$pv_ok)
+{
+my $need = $PV_ON;
+if($stop_t > 0)
+{
+if($pv < $PV_ON - $PV_HYST)
+{
+$sr->("stop_t",0);
+$sr->("pv_stop_w",0);
+$stop_t = 0;
+}
+else
+{
+my $n2 = $rn->("pv_stop_w",0) + $MIN_A * 230;
+$need = $n2 if($n2 > $need);
+$need = 999999 if(($now - $stop_t) < $RST_SEC);
+}
+}
+$sr->("pv_start_need",($need >= 999999) ? "sperre" : int($need));
+if($pv >= $need)
+{
+my $hs = $rn->("pv_high_since",0);
+if($hs == 0)
+{
+$sr->("pv_high_since",int($now));
+}
+elsif(($now - $hs) >= $PV_ON_SEC)
+{
+$pv_ok = 1;
+$sr->("pv_ok",1);
+$sr->("pv_low_since",0);
+$sr->("pv_high_since",0);
+$sr->("stop_t",0);
+$sr->("pv_stop_w",0);
+$stop_t = 0;
+}
+}
+else
+{
+$sr->("pv_high_since",0);
+}
+}
+else
+{
+if($pv < $PV_ON - $PV_HYST)
+{
+my $ls = $rn->("pv_low_since",0);
+if($ls == 0)
+{
+$sr->("pv_low_since",int($now));
+}
+elsif(($now - $ls) >= $PV_DELAY)
+{
+$pv_ok = 0;
+$sr->("pv_ok",0);
+$sr->("pv_low_since",0);
+}
+}
+else
+{
+$sr->("pv_low_since",0);
+}
+}
+
+if(!$pv_ok)
+{
+$setMode->("pvAuto");
+$sr->("phase_mode",1);
+$sr->("sofort_since",0);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$sr->("low_since",0);
+$sr->("bezug_stop_since",0);
+$sr->("active_mode",($stop_t > 0) ? "bezug_stop_warten" : ($rn->("pv_high_since",0) > 0) ? "pv_start_verzoegerung" : "pv_zu_gering");
+return;
+}
+
+
+if($rn->("sofort_since",0) == 0 && $vw eq "pvAuto")
+{
+$setMode->("pvAuto");
+$sr->("phase_mode",1);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$sr->("low_since",0);
+$sr->("active_mode","vorwahl_pv");
+return;
+}
+if($rn->("sofort_since",0) == 0 && $rn->("phase_mode",1) == 1
+&& $vw eq "sofortMax" && $sw_count < $SW_MAX)
+{
+$sr->("phase_mode",3);
+$sr->("start_3p_t",int($now));
+$sr->("active_mode","start_3p");
+}
+## ---------- Einspeisung zu gering -> von Sofort sicher auf PV Auto (openWB waehlt Phasen selbst)
+if($rn->("sofort_since",0) > 0 && $vw eq "pvAuto")
+{
+my $vl = $rn->("vw_low_since",0);
+if($vl == 0)
+{
+$sr->("vw_low_since",int($now));
+}
+elsif(($now - $vl) >= $par->("vorwahlFallSec",120) && ($now - $rn->("sw_t",0)) >= $SW_WIN)
+{
+$setMode->("pvAuto");
+$sr->("phase_mode",1);
+$sr->("sofort_since",0);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$sr->("low_since",0);
+$sr->("vw_low_since",0);
+$sr->("active_mode","feed_low_pvauto");
+return;
+}
+}
+else
+{
+$sr->("vw_low_since",0);
+}
+## ---------- Sofortladen aktiv halten
+my $ph   = ($rn->("phase_mode",1) == 3) ? 3 : 1;
+my $want = ($ph == 3) ? "sofortMax" : "sofort1";
+my $phE = ReadingsNum($WB,"Ladepunkt_Anzahl_Phasen",$ph);
+$phE = $ph if($phE != 1 && $phE != 3);
+my $maxA = ($phE == 3) ? $MAX_A3 : $MAX_A1;
+my $phP = $par->("voltProPhase",240) * $phE;
+
+if($rn->("sofort_since",0) == 0)
+{
+$sr->("sofort_since",int($now));
+$setA->($MIN_A);
+readingsSingleUpdate($hash,"last_chg_t",int($now),0);
+readingsSingleUpdate($hash,"last_dn_t",int($now),0);
+}
+$setMode->($want);
+my $tplPh = -1;
+{
+my $tpl = ReadingsVal("openWB_Garage_rechts_PV_Steuerung","tpl","");
+my $tj = ($tpl ne "") ? eval { JSON->new->decode($tpl) } : undef;
+if($tj && ref($tj->{chargemode}) eq "HASH" && ref($tj->{chargemode}{instant_charging}) eq "HASH")
+{
+$tplPh = $tj->{chargemode}{instant_charging}{phases_to_use};
+}
+}
+$sr->("tpl_phases",(defined($tplPh) ? $tplPh : -1));
+my $needPh = ($ph == 3) ? 3 : 1;
+if(($cm ne "instant_charging" && ($now - $rn->("mode_sent_t",0)) >= $RESEND)
+|| (defined($tplPh) && $tplPh =~ /^[013]$/ && $tplPh != $needPh
+&& ($now - $rn->("mode_sent_t",0)) >= $par->("tplResendSec",60)))
+{
+$setMode->($want,1);
+}
+
+## ---------- Umschaltpause erkennen
+## Waehrend der Phasenumschaltung laedt das EV nicht -> Einspeisung springt hoch.
+## Bis das EV wieder laedt und SW_SETTLE s stabil laeuft: keine Hochregelung,
+## keine Rueckschaltung, keine Voll-Erkennung.
+my $sw_t  = $rn->("sw_t",0);
+my $in_switch = 0;
+if(($now - $sw_t) < $SW_WIN)
+{
+if($power < $FULL_W)
+{
+$in_switch = 1;
+$sr->("run_since",0);
+}
+else
+{
+my $rs = $rn->("run_since",0);
+if($rs == 0)
+{
+$sr->("run_since",int($now));
+$rs = $now;
+}
+$in_switch = 1 if(($now - $rs) < $SW_SETTLE);
+}
+}
+$sr->("in_switch",$in_switch);
+
+## ---------- EV voll / Ladung unterbrochen
+if($power < $FULL_W && ($now - $sw_t) >= $SW_WIN)
+{
+my $ls = $rn->("low_since",0);
+if($ls == 0)
+{
+$sr->("low_since",int($now));
+}
+elsif(($now - $ls) >= $FULL_SEC
+&& ($now - $rn->("sofort_since",$now)) >= $FULL_SEC)
+{
+$sr->("car_full",1);
+$setMode->("pvAuto");
+$sr->("active_mode","car_full");
+return;
+}
+}
+else
+{
+$sr->("low_since",0);
+}
+
+my $bat_lade = 0;
+foreach my $bw (split(/,/,"GoodWe_Garage_Haus_West_5877,GoodWe_Haus_Ost_Mitte_5876,GoodWe"))
+{
+next if(!defined($defs{$bw}));
+my $pb = ReadingsNum($bw,"Power_Battery",0);
+$bat_lade += -$pb if($pb < 0);
+}
+my $phR = ReadingsNum($WB,"Ladepunkt_Anzahl_Phasen",0);
+if(!$in_switch && $power >= $FULL_W && ($phR == 1 || $phR == 3) && $phR != $ph
+&& ($now - $sw_t) >= $par->("phaseSyncAfterSec",420)
+&& ($now - $rn->("start_3p_t",0)) >= $par->("phaseSyncAfterSec",420))
+{
+my $ms = $rn->("ph_mismatch_since",0);
+if($ms == 0)
+{
+$sr->("ph_mismatch_since",int($now));
+$sr->("ph_mismatch",1);
+}
+elsif(($now - $ms) >= $par->("phaseMismatchSec",60))
+{
+$sr->("phase_mode",$phR);
+$sr->("ph_mismatch",0);
+$sr->("ph_mismatch_since",0);
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$setMode->(($phR == 3) ? "sofortMax" : "sofort1");
+$sr->("active_mode","phase_resync_".$phR."p");
+return;
+}
+}
+else
+{
+$sr->("ph_mismatch_since",0);
+$sr->("ph_mismatch",0);
+}
+my $avail = $power + $feed - $ziel + $bat_lade;
+my $P3_AV = $par->("phase3AvailW",4600);
+my $P3_AVS = $par->("phase3AvailSec",300);
+my $av_ok = ($avail >= $P3_AV) ? 1 : 0;
+$sr->("p3_avail",int($avail));
+## ---------- Phasenumschaltung
+if($ph == 1)
+{
+if(($power >= $P3_W || $av_ok) && $sw_count < $SW_MAX && !$r_switch)
+{
+my $s = $rn->("p3_since",0);
+if($s == 0)
+{
+$sr->("p3_since",int($now));
+}
+elsif(($now - $s) >= (($power >= $P3_W) ? $P3_SEC : $P3_AVS))
+{
+my $a3 = POSIX::floor((($avail > $power) ? $avail : $power) / (3 * $par->("voltProPhase",240)));
+$a3 = $MIN_A if($a3 < $MIN_A);
+$a3 = $MAX_A3 if($a3 > $MAX_A3);
+$sr->("phase_mode",3);
+$sr->("sw_count",$sw_count + 1);
+$sr->("sw_t",int($now));
+$sr->("p3_since",0);
+$sr->("bezug3_since",0);
+$setA->($a3);
+$setMode->("sofortMax");
+readingsSingleUpdate($hash,"last_chg_t",int($now),0);
+$sr->("active_mode","switch_1p_3p");
+return;
+}
+}
+else
+{
+$sr->("p3_since",0);
+}
+}
+else
+{
+if(!$in_switch && $grid > $BEZUG_MIN)
+{
+my $s = $rn->("bezug3_since",0);
+if($s == 0)
+{
+$sr->("bezug3_since",int($now));
+}
+elsif(($now - $s) >= $P1_SEC)
+{
+my $a1 = POSIX::floor(($power + $feed - $ziel) / $par->("voltProPhase",240));
+$a1 = $MIN_A if($a1 < $MIN_A);
+$a1 = $MAX_A1 if($a1 > $MAX_A1);
+$sr->("phase_mode",1);
+$sr->("sw_count",$sw_count + 1);
+$sr->("sw_t",int($now));
+$sr->("bezug3_since",0);
+$setA->($a1);
+$setMode->("sofort1");
+readingsSingleUpdate($hash,"last_chg_t",int($now),0);
+$sr->("active_mode","switch_3p_1p");
+return;
+}
+}
+else
+{
+$sr->("bezug3_since",0);
+}
+}
+
+## ---------- Stromregelung
+my $cur = $rn->("targetA",$MIN_A);
+$cur = $MIN_A if($cur < $MIN_A);
+$cur = $maxA if($cur > $maxA);
+my $neu = $cur;
+my $am  = "regelung";
+
+if($grid > $BEZUG_MIN)
+{
+if(($now - $rn->("last_dn_t",0)) >= $DN_SEC)
+{
+my $red = POSIX::ceil($grid * $BEZUG_F / $phP);
+$neu = $cur - $red;
+$neu = $MIN_A if($neu < $MIN_A);
+readingsSingleUpdate($hash,"last_dn_t",int($now),0) if($neu < $cur);
+}
+$am = ($neu < $cur) ? "bezug_cut" : "bezug_min";
+}
+else
+{
+my $diff = $feed + $bat_lade - $ziel;
+## Hochregeln nur, wenn das EV den bisherigen Sollstrom auch zieht
+## (verhindert Hochlaufen waehrend Umschaltpause / Anlauf / EV-seitiger Begrenzung)
+my $follow = ($power >= $FOLLOW_F * $cur * $phP) ? 1 : 0;
+$sr->("ev_follow",$follow);
+if($in_switch || $r_switch)
+{
+$am = $in_switch ? "switch_pause" : "rechts_switch_pause";
+}
+elsif($diff >= $phP && $follow && ($now - $rn->("last_chg_t",0)) >= $UP_SEC)
+{
+$neu = $cur + 1;
+$am = "up";
+}
+elsif($diff <= -$phP && ($now - $rn->("last_chg_t",0)) >= $UP_SEC)
+{
+$neu = $cur - 1;
+$am = "down";
+}
+}
+$neu = $MIN_A if($neu < $MIN_A);
+$neu = $maxA if($neu > $maxA);
+
+if($ph == 1 && !$in_switch && $neu <= $MIN_A && $grid > $STOP_W)
+{
+my $bs = $rn->("bezug_stop_since",0);
+if($bs == 0)
+{
+$sr->("bezug_stop_since",int($now));
+}
+elsif(($now - $bs) >= $STOP_SEC)
+{
+$setMode->("pvAuto");
+$sr->("pv_ok",0);
+$sr->("pv_low_since",0);
+$sr->("pv_stop_w",int($pv));
+$sr->("stop_t",int($now));
+$sr->("bezug_stop_since",0);
+$sr->("sofort_since",0);
+$sr->("low_since",0);
+$sr->("active_mode","bezug_stop");
+return;
+}
+}
+else
+{
+$sr->("bezug_stop_since",0);
+}
+
+if($neu != $cur)
+{
+readingsSingleUpdate($hash,"last_chg_t",int($now),0);
+}
+$setA->($neu);
+$sr->("active_mode",$am."_".$ph."p");
+return;
+}
+)
