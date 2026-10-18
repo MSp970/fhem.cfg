@@ -46,8 +46,8 @@ defmod Wasserquelle_Steuerung notify Zisterne_leer_erkannt|Zisterne_Stand_Prozen
   my $fluss_min  = 1.0;   # l/min: darunter bei laufender Pumpe = Zisterne leer
   my $druck_min  = 0.3;   # bar: darunter bei laufender Pumpe = Zisterne leer
   my $pumpe_vor  = 60;    # s Pumpenlaufzeit, bevor Sensoren bewertet werden
-  my $lvl_leer   = 5;     # % Zisternenstand: darunter -> leer, auf Frischwasser
-  my $lvl_start  = 15;    # % Zisternenstand: ab hier beim naechsten Wasserbedarf wieder Zisterne
+  my $lvl_leer   = 2;     # % Zisternenstand: darunter -> leer, auf Frischwasser
+  my $lvl_start  = 5;     # % Zisternenstand: ab hier beim naechsten Wasserbedarf wieder Zisterne
 
   my $num = sub {
     my ($d,$alter) = @_;
@@ -168,10 +168,10 @@ attr Wasserquelle_Steuerung room Bewässerung
 
 defmod Zisterne_Warnung notify Wasserquelle_Takt {
   my $now = time;
-  my $lvl_warn   = 20;    # % Warnschwelle Zisternenstand
+  my $lvl_warn   = 10;    # % Warnschwelle Zisternenstand
   my $lvl_drop   = 2;     # % Pegelverlust ohne Verbraucher in $drop_h h
   my $drop_h     = 6;
-  my $fluss_ext  = 0.5;   # l/min Durchfluss bei geschlossenen Zonen = fremder Verbraucher
+  my $fluss_ext  = 1.0;   # l/min Durchfluss bei geschlossenen Zonen = fremder Verbraucher
   my $dp_leck    = 0.2;   # bar Druckabfall in $leck_min min bei Pumpe aus/Zonen zu = Leck
   my $leck_min   = 10;
   my $intervall  = 6*3600;
@@ -196,6 +196,7 @@ defmod Zisterne_Warnung notify Wasserquelle_Takt {
 
   my $lvl   = $num->("Zisterne_Stand_Prozent",3600);
   my $q_z   = $num->("Durchfluss_Zisterne_lmin");
+  my $q_fw  = $num->("Durchfluss_Frischwasser_lmin");
   my $p_bew = $num->("Druck_Bewaesserung_bar");
   my $pumpe_an = (ReadingsVal("myShelly_Huette_Zisterne","relay_0","off") eq "on") ? 1 : 0;
   my $zonen_an = 0;
@@ -223,6 +224,11 @@ defmod Zisterne_Warnung notify Wasserquelle_Takt {
   # 2. fremder Verbraucher: Pumpe laeuft / Durchfluss bei allen Zonen zu
   my $ext = (!$zonen_an && $zonen_zu_seit > 90 && (($pumpe_an && ReadingsAge("myShelly_Huette_Zisterne","relay_0",0) > 90) || (defined $q_z && $q_z > $fluss_ext))) ? 1 : 0;
   $warn->("verbraucher_ohne_zone", !$ext, "Wasserverbrauch bei geschlossenen Zonen (Schlauch/Zapfstelle/Leck?) - Pumpe an: $pumpe_an, Durchfluss: ".(defined $q_z ? $q_z : "n/a")." l/min");
+
+  # 2b. Frischwasser: Durchfluss bei allen Zonen zu (fremder Verbraucher, Leck oder undichtes Ventil/Rueckschlagventil)
+  my $ext_fw = (!$zonen_an && $zonen_zu_seit > 90 && defined $q_fw && $q_fw > $fluss_ext) ? 1 : 0;
+  my $fw_offen = (ReadingsVal("Channel7","state","off") eq "on" || ReadingsVal("Channel8","state","off") eq "on") ? "Frischwasser-Relais offen" : "Frischwasser-Relais zu (Ventil/Rueckschlagventil undicht?)";
+  $warn->("frischwasser_ohne_zone", !$ext_fw, "Frischwasser-Durchfluss bei geschlossenen Zonen: ".(defined $q_fw ? $q_fw : "n/a")." l/min, $fw_offen");
 
   # 3. Leck/tropfender Schlauch, Pegel: sinkt ohne Bedarf ueber Stunden
   if($pumpe_an || $zonen_an || !defined $lvl)
