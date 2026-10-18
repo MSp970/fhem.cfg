@@ -1,0 +1,269 @@
+# ===== Patch Wasserquelle A9 (FHEM Kommandozeile) =====
+defmod Channel6 dummy
+attr Channel6 alias Ventil 6 Zisterne
+attr Channel6 event-on-change-reading .*
+attr Channel6 room Bewässerung,GPIO
+attr Channel6 setList on off
+defmod Channel7 dummy
+attr Channel7 alias Relais 7 Frischwasser
+attr Channel7 event-on-change-reading .*
+attr Channel7 room Bewässerung,GPIO
+attr Channel7 setList on off
+defmod Channel8 dummy
+attr Channel8 alias Relais 8 Frischwasser
+attr Channel8 event-on-change-reading .*
+attr Channel8 room Bewässerung,GPIO
+attr Channel8 setList on off
+defmod Druck_Bewaesserung_bar dummy
+attr Druck_Bewaesserung_bar room Bewässerung
+attr Druck_Bewaesserung_bar setList state:textField
+defmod Druck_Frischwasser_bar dummy
+attr Druck_Frischwasser_bar room Bewässerung
+attr Druck_Frischwasser_bar setList state:textField
+defmod Durchfluss_Zisterne_lmin dummy
+attr Durchfluss_Zisterne_lmin room Bewässerung
+attr Durchfluss_Zisterne_lmin setList state:textField
+defmod Durchfluss_Frischwasser_lmin dummy
+attr Durchfluss_Frischwasser_lmin room Bewässerung
+attr Durchfluss_Frischwasser_lmin setList state:textField
+defmod Zisterne_Stand_Prozent dummy
+attr Zisterne_Stand_Prozent room Bewässerung
+attr Zisterne_Stand_Prozent setList state:textField
+defmod Zisterne_leer_Sensor dummy
+attr Zisterne_leer_Sensor room Bewässerung
+attr Zisterne_leer_Sensor setList on off
+defmod Wasserquelle dummy
+attr Wasserquelle room Bewässerung
+attr Wasserquelle setList state:Zisterne,Frischwasser
+defmod Wasserquelle_Takt at +*00:00:10 trigger Wasserquelle_Steuerung takt
+attr Wasserquelle_Takt room Bewässerung
+
+defmod Wasserquelle_Steuerung notify Zisterne_leer_erkannt|Zisterne_Stand_Prozent|Bewaesserung_Zone_.*|Zisterne_leer_Sensor|Druck_Bewaesserung_bar|Druck_Frischwasser_bar|Durchfluss_Zisterne_lmin|Durchfluss_Frischwasser_lmin|Wasserquelle_Takt|Channel[678]|myShelly_Huette_Zisterne:relay_0.* {
+  my $dp_min     = 1.0;   # Frischwasser nur oeffnen, wenn Druck Bewaesserung mind. 1 bar unter Frischwasser
+  my $dp_rueck   = 0.3;   # Rueckflussschutz: schliessen, wenn Bewaesserung > Frischwasser + 0.3 bar
+  my $max_alter  = 120;   # Sensorwerte aelter als 120s gelten als ungueltig
+  my $ventil_pause = 5;   # Wartezeit zwischen Schliessen und Oeffnen der anderen Seite (s)
+  my $fluss_min  = 1.0;   # l/min: darunter bei laufender Pumpe = Zisterne leer
+  my $druck_min  = 0.3;   # bar: darunter bei laufender Pumpe = Zisterne leer
+  my $pumpe_vor  = 60;    # s Pumpenlaufzeit, bevor Sensoren bewertet werden
+  my $lvl_leer   = 5;     # % Zisternenstand: darunter -> leer, auf Frischwasser
+  my $lvl_start  = 15;    # % Zisternenstand: ab hier beim naechsten Wasserbedarf wieder Zisterne
+
+  my $num = sub {
+    my ($d,$alter) = @_;
+    my $v = ReadingsVal($d,"state","");
+    return undef if($v !~ /^-?\d+(\.\d+)?$/ || ReadingsAge($d,"state",9999) > ($alter // $max_alter));
+    return $v;
+  };
+
+  my $p_bew = $num->("Druck_Bewaesserung_bar");
+  my $p_fw  = $num->("Druck_Frischwasser_bar");
+  my $q_z   = $num->("Durchfluss_Zisterne_lmin");
+  my $lvl   = $num->("Zisterne_Stand_Prozent",3600);
+
+  my $pumpe_an = (ReadingsVal("myShelly_Huette_Zisterne","relay_0","off") eq "on") ? 1 : 0;
+  my $pumpe_lz = $pumpe_an ? ReadingsAge("myShelly_Huette_Zisterne","relay_0",0) : 0;
+
+  # Zisterne leer: Shelly-Leistung (bestehend) oder Durchfluss/Druck im Zisternenstrang (sobald Sensoren vorhanden)
+  if($pumpe_an && $pumpe_lz > $pumpe_vor && ((defined $q_z && $q_z < $fluss_min) || (defined $p_bew && $p_bew < $druck_min)))
+  {
+    fhem("set myShelly_Huette_Zisterne off 0");
+    fhem("set Zisterne_leer_Sensor on") if(ReadingsVal("Zisterne_leer_Sensor","state","off") ne "on");
+  }
+  # Zisternenstand zu niedrig -> leer (Latch)
+  if(defined $lvl && $lvl < $lvl_leer && ReadingsVal("Zisterne_leer_Sensor","state","off") ne "on")
+  {
+    fhem("set Zisterne_leer_Sensor on");
+  }
+
+  # Wasserbedarf = Pumpe an oder eine Zone offen; bei neuem Bedarf mit der Zisterne beginnen, wenn genug Wasser drin ist
+  my $zonen_an = 0;
+  foreach my $z (qw(Bewaesserung_Zone_1_Nord Bewaesserung_Zone_2_Suedwest Bewaesserung_Zone_3_Suedost Bewaesserung_Zone_4_Sued Bewaesserung_Zone_5_Garten_Wohnung_OG))
+  {
+    $zonen_an = 1 if(ReadingsVal($z,"state","off") eq "on");
+  }
+  my $bedarf = ($pumpe_an || $zonen_an) ? 1 : 0;
+  my $bedarf_vor = ReadingsVal("Wasserquelle","bedarf","0");
+  if($bedarf && !$bedarf_vor && defined $lvl && $lvl >= $lvl_start)
+  {
+    fhem("set Zisterne_leer_Sensor off") if(ReadingsVal("Zisterne_leer_Sensor","state","off") eq "on");
+    fhem("set Zisterne_leer_erkannt off") if(ReadingsVal("Zisterne_leer_erkannt","state","off") eq "on");
+  }
+  fhem("setreading Wasserquelle bedarf $bedarf") if($bedarf ne $bedarf_vor);
+  # ohne Pegelsensor: Latch nach 3h zuruecksetzen
+  if(!defined $lvl && ReadingsVal("Zisterne_leer_Sensor","state","off") eq "on" && ReadingsAge("Zisterne_leer_Sensor","state",0) > 10800)
+  {
+    fhem("set Zisterne_leer_Sensor off");
+  }
+
+  my $leer = (ReadingsVal("Zisterne_leer_erkannt","state","off") eq "on" || ReadingsVal("Zisterne_leer_Sensor","state","off") eq "on") ? 1 : 0;
+  my $quelle = $leer ? "Frischwasser" : "Zisterne";
+  fhem("set Wasserquelle $quelle") if(ReadingsVal("Wasserquelle","state","") ne $quelle);
+
+  my $c6 = ReadingsVal("Channel6","state","off");
+  my $c7 = ReadingsVal("Channel7","state","off");
+  my $c8 = ReadingsVal("Channel8","state","off");
+  my $a6 = ReadingsAge("Channel6","state",9999);
+  my $a7 = ReadingsAge("Channel7","state",9999);
+  my $a8 = ReadingsAge("Channel8","state",9999);
+  my $sensoren_ok = (defined $p_bew && defined $p_fw) ? 1 : 0;
+  my $dp = $sensoren_ok ? ($p_fw - $p_bew) : 0;
+  my $grund = "";
+
+  if($quelle eq "Frischwasser")
+  {
+    # Zisternenpumpe sicher aus, Zisternenventil zu
+    fhem("set myShelly_Huette_Zisterne off 0") if($pumpe_an);
+    fhem("set Channel6 off") if($c6 ne "off");
+
+    if($c7 eq "on" || $c8 eq "on")
+    {
+      # Rueckflussschutz / Fail-Safe: beide Frischwasser-Relais schliessen
+      if(!$sensoren_ok)
+      {
+        fhem("set Channel7 off"); fhem("set Channel8 off");
+        $grund = "frischwasser_zu_sensor_ungueltig";
+      }
+      elsif(-$dp > $dp_rueck)
+      {
+        fhem("set Channel7 off"); fhem("set Channel8 off");
+        $grund = "frischwasser_zu_rueckflussgefahr";
+      }
+      else { $grund = "frischwasser_offen"; }
+    }
+    else
+    {
+      if(!$sensoren_ok)           { $grund = "wartet_auf_drucksensoren"; }
+      elsif($c6 ne "off" || $a6 < $ventil_pause) { $grund = "wartet_auf_ventil6_zu"; }
+      elsif($dp < $dp_min)        { $grund = "wartet_auf_druckdifferenz_".sprintf("%.2f",$dp)."bar"; }
+      else
+      {
+        fhem("set Channel7 on"); fhem("set Channel8 on");
+        $grund = "frischwasser_geoeffnet";
+      }
+    }
+  }
+  else
+  {
+    # zurueck auf Zisterne: erst Frischwasser (beide) zu, dann Ventil 6 auf
+    fhem("set Channel7 off") if($c7 ne "off");
+    fhem("set Channel8 off") if($c8 ne "off");
+    if($c7 eq "off" && $c8 eq "off")
+    {
+      if($c6 ne "on" && $a7 >= $ventil_pause && $a8 >= $ventil_pause)
+      {
+        fhem("set Channel6 on");
+        $grund = "zisterne_geoeffnet";
+      }
+      else { $grund = ($c6 eq "on") ? "zisterne" : "wartet_auf_frischwasser_zu"; }
+    }
+    else { $grund = "wartet_auf_frischwasser_zu"; }
+  }
+
+  fhem("setreading Wasserquelle bereit ".(($quelle eq "Frischwasser" && $sensoren_ok) ? 1 : 0));
+  fhem("setreading Wasserquelle grund $grund");
+  fhem("setreading Wasserquelle dp_bar ".sprintf("%.2f",$dp));
+}
+attr Wasserquelle_Steuerung room Bewässerung
+
+defmod Zisterne_Warnung notify Wasserquelle_Takt {
+  my $now = time;
+  my $lvl_warn   = 20;    # % Warnschwelle Zisternenstand
+  my $lvl_drop   = 2;     # % Pegelverlust ohne Verbraucher in $drop_h h
+  my $drop_h     = 6;
+  my $fluss_ext  = 0.5;   # l/min Durchfluss bei geschlossenen Zonen = fremder Verbraucher
+  my $dp_leck    = 0.2;   # bar Druckabfall in $leck_min min bei Pumpe aus/Zonen zu = Leck
+  my $leck_min   = 10;
+  my $intervall  = 6*3600;
+  my $num = sub {
+    my ($d,$alter) = @_;
+    my $v = ReadingsVal($d,"state","");
+    return undef if($v !~ /^-?\d+(\.\d+)?$/ || ReadingsAge($d,"state",9999) > ($alter // 120));
+    return $v;
+  };
+  my $warn = sub {
+    my ($key,$ok,$txt) = @_;
+    my $prev = ReadingsVal("Zisterne_Warnung","w_$key","OK");
+    if($ok) { fhem("setreading Zisterne_Warnung w_$key OK") if($prev ne "OK"); return; }
+    my $last = ReadingsNum("Zisterne_Warnung","w_${key}_ts",0);
+    return if($prev eq "WARN" && ($now-$last) < $intervall);
+    fhem("setreading Zisterne_Warnung w_$key WARN");
+    fhem("setreading Zisterne_Warnung w_${key}_ts $now");
+    fhem("setreading Zisterne_Warnung w_${key}_txt $txt");
+    SendMail("[FHEM Zisterne] $key",$txt."\n\nZeitpunkt: ".FmtDateTime($now));
+    SendWhatsApp("[FHEM Zisterne] ".$txt);
+  };
+
+  my $lvl   = $num->("Zisterne_Stand_Prozent",3600);
+  my $q_z   = $num->("Durchfluss_Zisterne_lmin");
+  my $p_bew = $num->("Druck_Bewaesserung_bar");
+  my $pumpe_an = (ReadingsVal("myShelly_Huette_Zisterne","relay_0","off") eq "on") ? 1 : 0;
+  my $zonen_an = 0;
+  foreach my $z (qw(Bewaesserung_Zone_1_Nord Bewaesserung_Zone_2_Suedwest Bewaesserung_Zone_3_Suedost Bewaesserung_Zone_4_Sued Bewaesserung_Zone_5_Garten_Wohnung_OG))
+  {
+    $zonen_an = 1 if(ReadingsVal($z,"state","off") eq "on");
+  }
+  # Alter des Zustands "alle Zonen zu" (letzter Zonenwechsel)
+  my $zonen_zu_seit = 99999;
+  if(!$zonen_an)
+  {
+    foreach my $z (qw(Bewaesserung_Zone_1_Nord Bewaesserung_Zone_2_Suedwest Bewaesserung_Zone_3_Suedost Bewaesserung_Zone_4_Sued Bewaesserung_Zone_5_Garten_Wohnung_OG))
+    {
+      my $a = ReadingsAge($z,"state",99999);
+      $zonen_zu_seit = $a if($a < $zonen_zu_seit);
+    }
+  }
+
+  # 1. niedriger Zisternenstand
+  if(defined $lvl)
+  {
+    $warn->("stand_niedrig", $lvl >= $lvl_warn, sprintf("Zisternenstand niedrig: %.0f %%",$lvl));
+  }
+
+  # 2. fremder Verbraucher: Pumpe laeuft / Durchfluss bei allen Zonen zu
+  my $ext = (!$zonen_an && $zonen_zu_seit > 90 && (($pumpe_an && ReadingsAge("myShelly_Huette_Zisterne","relay_0",0) > 90) || (defined $q_z && $q_z > $fluss_ext))) ? 1 : 0;
+  $warn->("verbraucher_ohne_zone", !$ext, "Wasserverbrauch bei geschlossenen Zonen (Schlauch/Zapfstelle/Leck?) - Pumpe an: $pumpe_an, Durchfluss: ".(defined $q_z ? $q_z : "n/a")." l/min");
+
+  # 3. Leck/tropfender Schlauch, Pegel: sinkt ohne Bedarf ueber Stunden
+  if($pumpe_an || $zonen_an || !defined $lvl)
+  {
+    fhem("setreading Zisterne_Warnung lvl_ref -") if(ReadingsVal("Zisterne_Warnung","lvl_ref","-") ne "-");
+  }
+  else
+  {
+    my $ref = ReadingsVal("Zisterne_Warnung","lvl_ref","-");
+    if($ref eq "-" || $lvl > $ref)
+    {
+      fhem("setreading Zisterne_Warnung lvl_ref $lvl");
+      fhem("setreading Zisterne_Warnung lvl_ref_ts $now");
+    }
+    elsif(($now - ReadingsNum("Zisterne_Warnung","lvl_ref_ts",$now)) >= $drop_h*3600)
+    {
+      $warn->("pegel_sinkt", ($ref - $lvl) < $lvl_drop, sprintf("Zisternenstand sinkt ohne Bewaesserung: %.1f %% -> %.1f %% in %d h (Leck/tropfender Schlauch?)",$ref,$lvl,$drop_h));
+      fhem("setreading Zisterne_Warnung lvl_ref $lvl");
+      fhem("setreading Zisterne_Warnung lvl_ref_ts $now");
+    }
+  }
+
+  # 4. Leck/Tropfen, Druck: faellt bei Pumpe aus und Zonen zu (Rueckschlagventil/Druckbehaelter vorausgesetzt)
+  if(!$pumpe_an && !$zonen_an && defined $p_bew && $zonen_zu_seit > 120)
+  {
+    my $pref = ReadingsVal("Zisterne_Warnung","p_ref","-");
+    if($pref eq "-" || $p_bew > $pref)
+    {
+      fhem("setreading Zisterne_Warnung p_ref $p_bew");
+      fhem("setreading Zisterne_Warnung p_ref_ts $now");
+    }
+    elsif(($now - ReadingsNum("Zisterne_Warnung","p_ref_ts",$now)) >= $leck_min*60)
+    {
+      $warn->("druckabfall", ($pref - $p_bew) < $dp_leck, sprintf("Druckabfall im Zisternenstrang bei geschlossenen Zonen: %.2f -> %.2f bar in %d min (Leck/tropfender Schlauch?)",$pref,$p_bew,$leck_min));
+      fhem("setreading Zisterne_Warnung p_ref $p_bew");
+      fhem("setreading Zisterne_Warnung p_ref_ts $now");
+    }
+  }
+  else
+  {
+    fhem("setreading Zisterne_Warnung p_ref -") if(ReadingsVal("Zisterne_Warnung","p_ref","-") ne "-");
+  }
+}
+attr Zisterne_Warnung room Bewässerung
