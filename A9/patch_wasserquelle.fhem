@@ -38,6 +38,93 @@ attr Wasserquelle setList state:Zisterne,Frischwasser
 defmod Wasserquelle_Takt at +*00:00:10 trigger Wasserquelle_Steuerung takt
 attr Wasserquelle_Takt room Bewässerung
 
+defmod Wasserzaehler dummy
+attr Wasserzaehler alias Wasserzähler Bewässerung (Liter)
+attr Wasserzaehler room Bewässerung
+attr Wasserzaehler stateFormat Zisterne: z_gesamt_l l / heute z_gesamt_heute_l l | Frischwasser: f_gesamt_l l / heute f_gesamt_heute_l l
+
+defmod Ventil_Verriegelung notify Channel[678]:.* {
+  my $c6 = ReadingsVal("Channel6","state","off");
+  my $c7 = ReadingsVal("Channel7","state","off");
+  my $c8 = ReadingsVal("Channel8","state","off");
+  if($c6 eq "on" && ($c7 eq "on" || $c8 eq "on"))
+  {
+    fhem("set Channel7 off");
+    fhem("set Channel8 off");
+    my $txt = "VERRIEGELUNG: Ventil 6 Zisterne und Frischwasser gleichzeitig angefordert (6=$c6 7=$c7 8=$c8) - Frischwasser-Relais 7/8 geschlossen";
+    Log3("Ventil_Verriegelung",1,$txt);
+    fhem("setreading Ventil_Verriegelung letzte_ausloesung ".FmtDateTime(time));
+    SendMail("[FHEM Zisterne] Ventil-Verriegelung",$txt);
+    SendWhatsApp("[FHEM Zisterne] ".$txt);
+  }
+}
+attr Ventil_Verriegelung room Bewässerung
+
+defmod Wasserzaehler_Steuerung notify Wasserquelle_Takt {
+  my $now  = time;
+  my $hash = $defs{"Wasserzaehler"};
+  if($hash)
+  {
+    my $last = ReadingsNum("Wasserzaehler","last_ts",0);
+    my $dt   = $last ? $now - $last : 0;
+    $dt = 30 if($dt > 30);
+    my $tag  = substr(TimeNow(),0,10);
+    my @bk   = qw(eg og_zone5 og_sonstiges);
+    my %q;
+    foreach my $p (qw(z f))
+    {
+      my $d = ($p eq "z") ? "Durchfluss_Zisterne_lmin" : "Durchfluss_Frischwasser_lmin";
+      my $v = ReadingsVal($d,"state","");
+      $q{$p} = ($v =~ /^-?\d+(\.\d+)?$/ && ReadingsAge($d,"state",9999) <= 120 && $v > 0) ? $v : 0;
+    }
+    my $eg  = 0;
+    foreach my $z (qw(Bewaesserung_Zone_1_Nord Bewaesserung_Zone_2_Suedwest Bewaesserung_Zone_3_Suedost Bewaesserung_Zone_4_Sued))
+    {
+      $eg = 1 if(ReadingsVal($z,"state","off") eq "on");
+    }
+    my $og5 = (ReadingsVal("Bewaesserung_Zone_5_Garten_Wohnung_OG","state","off") eq "on") ? 1 : 0;
+    my $bucket = $eg ? "eg" : ($og5 ? "og_zone5" : "og_sonstiges");
+
+    readingsBeginUpdate($hash);
+    if(ReadingsVal("Wasserzaehler","datum","") ne $tag)
+    {
+      foreach my $p (qw(z f))
+      {
+        foreach my $b (@bk, "gesamt")
+        {
+          readingsBulkUpdate($hash,"${p}_${b}_gestern_l",ReadingsVal("Wasserzaehler","${p}_${b}_heute_l",0));
+          readingsBulkUpdate($hash,"${p}_${b}_heute_l",0);
+        }
+        readingsBulkUpdate($hash,"${p}_og_gestern_l",ReadingsVal("Wasserzaehler","${p}_og_heute_l",0));
+        readingsBulkUpdate($hash,"${p}_og_heute_l",0);
+      }
+      readingsBulkUpdate($hash,"datum",$tag);
+    }
+    if($dt > 0)
+    {
+      foreach my $p (qw(z f))
+      {
+        my $l = $q{$p} * $dt / 60;
+        next if($l <= 0);
+        foreach my $b ($bucket, "gesamt")
+        {
+          readingsBulkUpdate($hash,"${p}_${b}_l",sprintf("%.2f",ReadingsNum("Wasserzaehler","${p}_${b}_l",0)+$l));
+          readingsBulkUpdate($hash,"${p}_${b}_heute_l",sprintf("%.2f",ReadingsNum("Wasserzaehler","${p}_${b}_heute_l",0)+$l));
+        }
+        if($bucket ne "eg")
+        {
+          readingsBulkUpdate($hash,"${p}_og_l",sprintf("%.2f",ReadingsNum("Wasserzaehler","${p}_og_l",0)+$l));
+          readingsBulkUpdate($hash,"${p}_og_heute_l",sprintf("%.2f",ReadingsNum("Wasserzaehler","${p}_og_heute_l",0)+$l));
+        }
+      }
+    }
+    readingsBulkUpdate($hash,"last_ts",$now);
+    readingsBulkUpdate($hash,"aktuell_bereich",$bucket);
+    readingsEndUpdate($hash,1);
+  }
+}
+attr Wasserzaehler_Steuerung room Bewässerung
+
 defmod Wasserquelle_Steuerung notify Zisterne_leer_erkannt|Zisterne_Stand_Prozent|Bewaesserung_Zone_.*|Zisterne_leer_Sensor|Druck_Bewaesserung_bar|Druck_Frischwasser_bar|Durchfluss_Zisterne_lmin|Durchfluss_Frischwasser_lmin|Wasserquelle_Takt|Channel[678]|myShelly_Huette_Zisterne:relay_0.* {
   my $dp_min     = 1.0;   # Frischwasser nur oeffnen, wenn Druck Bewaesserung mind. 1 bar unter Frischwasser
   my $dp_rueck   = 0.3;   # Rueckflussschutz: schliessen, wenn Bewaesserung > Frischwasser + 0.3 bar
@@ -273,3 +360,14 @@ defmod Zisterne_Warnung notify Wasserquelle_Takt {
   }
 }
 attr Zisterne_Warnung room Bewässerung
+
+# Hardware-Verriegelung GPIO (Relais nur, wenn Gegenseite nicht on)
+defmod di_channel_6 DOIF ([Channel6] eq "on" and [Channel7] ne "on" and [Channel8] ne "on") ({qx(gpioset --mode=exit gpiochip0 20=0)}) DOELSE ({qx(gpioset --mode=exit gpiochip0 20=1)})
+attr di_channel_6 do always
+attr di_channel_6 room GPIO
+defmod di_channel_7 DOIF ([Channel7] eq "on" and [Channel6] ne "on") ({qx(gpioset --mode=exit gpiochip0 21=0)}) DOELSE ({qx(gpioset --mode=exit gpiochip0 21=1)})
+attr di_channel_7 do always
+attr di_channel_7 room GPIO
+defmod di_channel_8 DOIF ([Channel8] eq "on" and [Channel6] ne "on") ({qx(gpioset --mode=exit gpiochip0 26=0)}) DOELSE ({qx(gpioset --mode=exit gpiochip0 26=1)})
+attr di_channel_8 do always
+attr di_channel_8 room GPIO
