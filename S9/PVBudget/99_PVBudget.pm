@@ -28,6 +28,9 @@ my %PVB_DEF = (
   wp_unsich => 0.30,                    # rel. Unsicherheit WP-Bedarf (P10-Szenario: x(1+z*wert))
   pv_gut_kwh => 20,                     # PV-Tagesertrag ab dem Folgetag als "gut" gilt
   sigma_def => 0.30,                    # rel. PV-Prognoseunsicherheit ohne Historie
+  ziel_aktiv => 0,                      # 1 = v2 darf soc_ziel_empf als Ladeziel nutzen (Patch in DOIF_GoodWe_v2)
+  ziel_marge => 3,                      # % Sicherheitsaufschlag auf das Ladeziel
+  ziel_min => 80, ziel_max => 100,      # Grenzen der Empfehlung in %
   soc_ziel => 0,                        # Ladeziel in % (0 = auto: v2-Vollladen -> 100, sonst EMS_Control:socMax1)
   hf_aktiv => 1,                        # Stundenfaktoren (Verschattung) anwenden
   tbase_def => 15,                      # Heizgrenze, sonst Heiz_Optimierung_KI:temp_basis
@@ -294,16 +297,31 @@ sub PVB_budget($) {
 
   # Akku
   my $soc=ReadingsNum("GoodWe","SOC",0);
+  my $age=ReadingsAge("GoodWe","SOC",99999); $age=99999 if(!defined($age));
+  my $cap=ReadingsNum("EMS_Control","capacity1",16.2);
   my $smin=ReadingsNum("EMS_Control","socMin1",20);
   my $ems_max=ReadingsNum("EMS_Control","socMax1",80);
   my $vl=ReadingsNum("DOIF_GoodWe_v2","vollladen_rest",0)>0 ? 1 : 0;
+  # vorausschauendes Ladeziel: Bedarf bis PV-Uebernahme (P10, inkl. WP) als SOC; tagsueber neu, nachts gehalten
+  my $empf_neu=ceil($smin+($Dz{p10}+PVB_P("res_kwh",0.5))/($cap>0?$cap:16.2)*100+PVB_P("ziel_marge",3));
+  $empf_neu=PVB_clip($empf_neu,PVB_P("ziel_min",80),PVB_P("ziel_max",100));
+  my $empf=PVB_N("soc_ziel_empf",0);
+  $empf=$empf_neu if($empf<=0 || (!$night && abs($empf_neu-$empf)>=2));
+  if($age<=180) {
+    PVB_W("soc_ziel_empf",$empf);               # wird jede Minute neu geschrieben -> Alter = Frische fuer v2
+    PVB_W("soc_ziel_empf_grund",sprintf("%d%% = SOC-min %d%% + (Defizit P10 %.1f + Reserve %.1f kWh)/%.1f kWh + Marge %d%%%s",
+      $empf,$smin,$Dz{p10},PVB_P("res_kwh",0.5),$cap,PVB_P("ziel_marge",3),$night?" [nachts gehalten]":""));
+  }
+  my $v2ziel = $vl ? 100
+             : ((PVB_P("ziel_aktiv",0)==1 && $age<=180 && $empf>$ems_max) ? $empf : $ems_max);   # so rechnet v2 (mit Patch)
   my $zp=PVB_P("soc_ziel",0); my ($smax,$zq);
   if($zp>0)    { $smax=PVB_clip($zp,$smin+1,100); $zq="vorgabe p_soc_ziel"; }
   elsif($vl)   { $smax=100;      $zq="v2 vollladen_rest"; }
+  elsif($v2ziel>$ems_max) { $smax=$v2ziel; $zq="PVB-Empfehlung (p_ziel_aktiv=1)"; }
   else         { $smax=$ems_max; $zq="EMS_Control socMax1"; }
-  my $zhint = ($ems_max < $smax && !$vl)
-    ? "ACHTUNG: EMS_Control socMax1=$ems_max begrenzt das Laden, Ziel $smax% wird so nicht erreicht" : "ok";
-  my $cap=ReadingsNum("EMS_Control","capacity1",16.2);
+  my $zhint = ($smax>$v2ziel)       ? "ACHTUNG: v2 laedt nur bis $v2ziel%, Ziel $smax% wird so nicht erreicht"
+            : ($empf>$v2ziel)       ? "Empfehlung $empf% liegt ueber v2-Ziel $v2ziel% (p_ziel_aktiv=".PVB_P("ziel_aktiv",0)." bzw. v2 nicht gepatcht)"
+            : "ok";
   my $eb=($soc-$smin)/100*$cap; $eb=0 if($eb<0);
   my $cn=($smax-$smin)/100*$cap; $cn=0 if($cn<0);
   my $eta=PVB_P("eta",0.9); my $res=PVB_P("res_kwh",0.5);
@@ -315,7 +333,6 @@ sub PVB_budget($) {
     $jetzt{$q}=$eb-$need{$q};
     $bud{$q}=$night?($jetzt{$q}<$tag{$q}?$jetzt{$q}:$tag{$q}):$tag{$q};
   }
-  my $age=ReadingsAge("GoodWe","SOC",99999); $age=99999 if(!defined($age));
   my $ampel;
   if($age>180)                              { $ampel="unbekannt"; }
   elsif($bud{p10}>=PVB_P("min_bud_kwh",0.5)){ $ampel="gruen"; }
@@ -351,7 +368,7 @@ sub PVB_budget($) {
     budget_tag_p10=>sprintf("%.2f",$tag{p10}), budget_jetzt_p10=>sprintf("%.2f",$jetzt{p10}),
     budget_p10=>sprintf("%.2f",$bud{p10}), budget_p50=>sprintf("%.2f",$bud{p50}),
     wp_budget_w_p10=>$wpw10, wp_budget_w_p50=>$wpw50, wp_ist_w=>int($wp_ist), wp_status=>$wpstat,
-    soc_ziel=>$smax, soc_ziel_quelle=>$zq, soc_ziel_hinweis=>$zhint, state=>$ampel );
+    soc_ziel=>$smax, soc_ziel_quelle=>$zq, soc_ziel_hinweis=>$zhint, v2_ziel=>$v2ziel, state=>$ampel );
   readingsBulkUpdate($h,$_,$o{$_},0) for keys %o;
   readingsBulkUpdate($h,"ampel",$ampel,1);
   readingsBulkUpdate($h,"wp_budget_w",$wpw,1);
