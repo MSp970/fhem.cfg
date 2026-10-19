@@ -12,6 +12,7 @@ my $rn=sub { return ReadingsNum($D,$_[0],$_[1]); };
 my $q=sub { my ($r,$v)=@_; readingsSingleUpdate($h,$r,$v,0) if(ReadingsVal($D,$r,"-x-") ne $v); };
 my $w=sub { my ($r,$v)=@_; readingsSingleUpdate($h,$r,$v,1); };
 my $hx=sub { return sprintf("%02d",$_[0]); };
+my $okh=sub { my $i=shift; my $x=$hx->($i); return ($rn->("cov_min_$x",0)>=45 && $i>=$rn->("snap_hh",0)) ? 1 : 0; };
 my $pct=sub { my ($f,$i)=@_; return ($i>0 && defined($f) && $f ne "-" && $f>0) ? sprintf("%.1f",($f-$i)/$i*100) : "-"; };
 my $stat=sub {
   my ($col)=@_; my ($n,$sa,$sb)=(0,0,0);
@@ -23,10 +24,17 @@ my $stat=sub {
 };
 my $fin=sub {
   my ($d)=@_; my ($ist,$bh,$si,$ss)=(0,0,0,0);
+  my $miss=0;
   foreach my $i (0..23) {
     my $x=$hx->($i); my $e=$rn->("ist_h_$x",0)/1000; $ist+=$e;
+    $miss++ if($rn->("snap_$x",0)>=0.2 && !$okh->($i));
     if($rn->("begr_min_$x",0)>=1) { $bh++; next; }
-    my $sn=$rn->("snap_$x",0); if($sn>=0.2) { $ss+=$sn; $si+=$e; }
+    my $sn=$rn->("snap_$x",0); if($sn>=0.2 && $okh->($i)) { $ss+=$sn; $si+=$e; }
+  }
+  if($miss>0 || $rn->("snap_hh",99)>7) {
+    $w->("bilanz_text",sprintf("%s unvollstaendig (Messung oder Prognose fehlt in %d h), keine Bewertung",$d,$miss)); $q->("final_ymd",$d);
+    if($rv->("snap_ymd","") eq $d) { foreach my $i (0..23) { my $x=$hx->($i); my $rad=$rn->("rad_$x",0); next if($rad<0.08 || $rn->("begr_min_$x",0)>=1 || !$okh->($i)); foreach my $s (@src) { my $v=$rn->("ist_".$s->[0]."_$x",0)/1000/$rad; my $k="k_".$s->[0]."_$x"; my $old=$rn->($k,-1); $q->($k,sprintf("%.3f",($old<0) ? $v : 0.8*$old+0.2*$v)); } } }
+    return;
   }
   return if($ist<0.5);
   my $f24=$rv->("d1_12","-"); my $fA=$rv->("d1_21","-"); my $f06=($rv->("snap_ymd","") eq $d) ? $rv->("fc_d0_06","-") : "-"; my $fo=($rv->("snap_ymd","") eq $d) ? $rv->("form_d0_06","-") : "-";
@@ -47,7 +55,7 @@ my $fin=sub {
   }
   if($rv->("snap_ymd","") eq $d) {
     foreach my $i (0..23) {
-      my $x=$hx->($i); my $rad=$rn->("rad_$x",0); next if($rad<0.08 || $rn->("begr_min_$x",0)>=1);
+      my $x=$hx->($i); my $rad=$rn->("rad_$x",0); next if($rad<0.08 || $rn->("begr_min_$x",0)>=1 || !$okh->($i));
       foreach my $s (@src) {
         my $v=$rn->("ist_".$s->[0]."_$x",0)/1000/$rad; my $k="k_".$s->[0]."_$x"; my $old=$rn->($k,-1);
         $q->($k,sprintf("%.3f",($old<0) ? $v : 0.8*$old+0.2*$v));
@@ -63,9 +71,9 @@ if($rv->("tag_ymd","") ne $ymd) {
   $q->("d1_21",($rv->("snapT21_ymd","") eq $ymd) ? $rv->("snapT21","-") : "-");
   foreach my $i (0..23) {
     my $x=$hx->($i);
-    foreach my $r ("ist_h_$x","begr_min_$x","snap_$x","rad_$x","formh_$x",map { "ist_".$_->[0]."_$x" } @src) { $q->($r,0); }
+    foreach my $r ("ist_h_$x","cov_min_$x","begr_min_$x","snap_$x","rad_$x","formh_$x",map { "ist_".$_->[0]."_$x" } @src) { $q->($r,0); }
   }
-  $q->("tag_ymd",$ymd); $q->("tag_faktor","1.000"); $q->("snap_ymd",""); $q->("fc_d0_06","-"); $q->("form_d0_06","-"); $q->("h_log","");
+  $q->("tag_ymd",$ymd); $q->("tag_faktor","1.000"); $q->("snap_ymd",""); $q->("snap_hh",99); $q->("fc_d0_06","-"); $q->("form_d0_06","-"); $q->("h_log","");
 }
 my $last=$rn->("last_t",0); my $dt=$now-$last; $dt=0 if($dt<0 || $dt>300); $q->("last_t",$now);
 if($dt>0) {
@@ -74,7 +82,7 @@ if($dt>0) {
     my ($id,$dv,$rd)=@$s; my $p=ReadingsNum($dv,$rd,0); my $age=ReadingsAge($dv,$rd,0); $p=0 if($p<0 || (defined($age) && $age>900));
     my $k="ist_${id}_$x"; $q->($k,sprintf("%.1f",$rn->($k,0)+$p*$dt/3600)); $tot+=$p;
   }
-  $q->("ist_h_$x",sprintf("%.1f",$rn->("ist_h_$x",0)+$tot*$dt/3600));
+  $q->("ist_h_$x",sprintf("%.1f",$rn->("ist_h_$x",0)+$tot*$dt/3600)); $q->("cov_min_$x",sprintf("%.1f",$rn->("cov_min_$x",0)+$dt/60));
   my $lim=ReadingsNum($WRD,"EMS_max_feed_in",99999); $lim=99999 if($lim<100);
   if(ReadingsNum("HA_SDM630M_Nergie","Einspeiseleistung",0) >= $lim-ReadingsNum("EMS_Control","pvBegrenztMarginW",300)) { $q->("begr_min_$x",sprintf("%.2f",$rn->("begr_min_$x",0)+$dt/60)); }
 }
@@ -91,7 +99,7 @@ if($hh>=6 && $rv->("snap_ymd","") ne $ymd) {
     }
     $tf+=$fo; $q->("formh_$x",sprintf("%.2f",$fo));
   }
-  $w->("fc_d0_06",sprintf("%.1f",$t)); $w->("form_d0_06",sprintf("%.1f",$tf)); $q->("form_abdeckung",$dayh ? sprintf("%d/%d",$cov,$dayh) : "0/0");
+  $q->("snap_hh",$hh); $w->("fc_d0_06",($hh>7) ? "-" : sprintf("%.1f",$t)); $w->("form_d0_06",($hh>7) ? "-" : sprintf("%.1f",$tf)); $q->("form_abdeckung",$dayh ? sprintf("%d/%d",$cov,$dayh) : "0/0");
   $q->("snap_ymd",$ymd); $q->("snap_zeit",sprintf("%02d:%02d",$hh,$mi));
 }
 if($hh==12 && $rv->("snapT12_ymd","") ne $ymdT) { $q->("snapT12",sprintf("%.1f",ReadingsNum($FC,$FCT,0))); $q->("snapT12_ymd",$ymdT); }
@@ -102,7 +110,7 @@ if($rv->("snap_ymd","") eq $ymd) {
     my $x=$hx->($i); my $sn=$rn->("snap_$x",0); $snt+=$sn;
     if($i<$hh) {
       $ist+=$rn->("ist_h_$x",0)/1000;
-      if($sn>=0.3 && $rn->("begr_min_$x",0)<1) { $ss+=$sn; $si+=$rn->("ist_h_$x",0)/1000; }
+      if($sn>=0.3 && $rn->("begr_min_$x",0)<1 && $okh->($i)) { $ss+=$sn; $si+=$rn->("ist_h_$x",0)/1000; }
     } else {
       my $fr=($i==$hh) ? (60-$mi)/60 : 1; $srest+=$sn*$fr; $lrest+=ReadingsNum($FC,"pv_fc_today_$x",0)*$fr;
     }

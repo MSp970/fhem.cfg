@@ -17,9 +17,9 @@ my $code=eval "sub { $body }"; die $@ if $@;
 # simulation: sources, forecast
 my $tz0=do { use POSIX qw(mktime); mktime(0,0,0,19,9,126) }; # 2026-10-19 00:00 local
 sub sun { my($hf)=@_; my $x=($hf-7.5)/(18.0-7.5); return ($x<=0||$x>=1)?0:sin(3.14159*$x)**1.2; }
-sub run_day { my($day,$weather,$bias)=@_;
+sub run_day { my($day,$weather,$bias,$start)=@_; $start//=0;
   my $base=$tz0+$day*86400;
-  for my $min (0..1439) {
+  for my $min ($start..1439) {
     $main::T=$base+$min*60; my $hf=$min/60;
     # forecast readings: fc hourly kWh (what DOIF would show): forecast weather = given by $weather (fc) 
     for my $i (0..23) { my $f=61*sun($i+0.5)*$weather->{fc}; setr($mode eq "a9"?"DOIF_PV_forecast_Batterie_laden":"di_PV_fc_stunden",sprintf("pv_fc_today_%02d",$i),sprintf("%.2f",$f)); my $ri=$i+1; setr("DWD","fc0_${ri}_Rad1h",sprintf("%.0f",3600*0.6*sun($i+0.5)*$weather->{fc})) if($ri<=23); }
@@ -30,12 +30,13 @@ sub run_day { my($day,$weather,$bias)=@_;
     if($mode eq "a9") { setr("GoodWe_Garage_Haus_West_5877","PV_Total_Power",sprintf("%.0f",$act*$sh[0])); setr("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",sprintf("%.0f",$act*$sh[1])); setr("myShelly_Technikraum_Deye_PM_L1","Total_Power_i",sprintf("%.0f",$act*$sh[2])); }
     else { setr("GoodWe","PV_Total_Power",sprintf("%.0f",$act*$sh[0])); setr("smart_meter_PV_Deye","Power_Deye_gesamt_Huette",sprintf("%.0f",$act*$sh[1])); setr("myShelly_Garage_Deye","Total_Power",sprintf("%.0f",$act*$sh[2])); }
     setr("HA_SDM630M_Nergie","Einspeiseleistung",0);
-    my $r=$code->(); 
+    my $r=$code->(); if($ENV{PROBE} && $day==0 && ($min==690||$min==780||$min==900||$min==1100)) { printf "  t=%02d:%02d tag_faktor=%s ratio=%s ist_bisher=%s snap_hh=%s fc_tag_adj=%s\n",int($min/60),$min%60,ReadingsVal('PV_Prognose','tag_faktor','?'),ReadingsVal('PV_Prognose','tag_ratio','-'),ReadingsVal('PV_Prognose','ist_bisher_kwh','?'),ReadingsVal('PV_Prognose','snap_hh','?'),ReadingsVal('PV_Prognose','fc_tag_adj_kwh','?'); }
     if($@) { die $@ }
   }
 }
+my $LATE=$ENV{LATE}||0;
 my @w=({fc=>1.0,act=>0.9,fcTomorrow=>55},{fc=>0.8,act=>0.5,fcTomorrow=>50},{fc=>0.7,act=>0.75,fcTomorrow=>45},{fc=>1.0,act=>1.0,fcTomorrow=>60});
-for my $d (0..4) { my $wx=$w[$d % @w]; run_day($d,$wx,1.0); my $P="PV_Prognose"; print "day $d: ".ReadingsVal($P,"bilanz_text","?")."\n   tag_faktor=".ReadingsVal($P,"tag_faktor","?")." form_abd=".ReadingsVal($P,"form_abdeckung","?")." snap_zeit=".ReadingsVal($P,"snap_zeit","?")."\n"; }
+for my $d (0..4) { my $wx=$w[$d % @w]; run_day($d,$wx,1.0,($d==0?$LATE:0)); my $P="PV_Prognose"; print "day $d: ".ReadingsVal($P,"bilanz_text","?")."\n   tag_faktor=".ReadingsVal($P,"tag_faktor","?")." form_abd=".ReadingsVal($P,"form_abdeckung","?")." snap_zeit=".ReadingsVal($P,"snap_zeit","?")."\n"; }
 my $P="PV_Prognose"; print "stats: mape06=".ReadingsVal($P,"stat_mape_fc06","?")." bias06=".ReadingsVal($P,"stat_bias_fc06","?")." n=".ReadingsVal($P,"stat_n_fc06","?")." mape24=".ReadingsVal($P,"stat_mape_fc24","?")." mapeform=".ReadingsVal($P,"stat_mape_form06","?")."\n";
 print "hist=".ReadingsVal($P,"hist","?")."\n";
 print "events: ".scalar(@EVENTS)."\n"; my %c; $c{$_->[1]}++ for @EVENTS; print join(" ",map {"$_=$c{$_}"} sort keys %c),"\n";
