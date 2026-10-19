@@ -25,7 +25,7 @@ my %PVB_DEF = (
   res_kwh => 0.5,                       # Sicherheitsreserve Akku
   wpmax_w => 3500, step_w => 250,       # max. WP-Budgetleistung, Stufung
   min_bud_kwh => 0.5,                   # Mindestbudget fuer Ampel gruen
-  frueh_anteil => 0.25,                 # Anteil WP-Tagesbedarf vor PV-Uebernahme
+  wp_unsich => 0.30,                    # rel. Unsicherheit WP-Bedarf (P10-Szenario: x(1+z*wert))
   pv_gut_kwh => 20,                     # PV-Tagesertrag ab dem Folgetag als "gut" gilt
   sigma_def => 0.30,                    # rel. PV-Prognoseunsicherheit ohne Historie
   hf_aktiv => 1,                        # Stundenfaktoren (Verschattung) anwenden
@@ -174,6 +174,16 @@ sub PVB_daycl($) {
       }
     }
   }
+  # WP-Stundenverteilung (Anteil je Stunde am Tagesverbrauch), nur bei vollem Tag und nennenswertem Verbrauch
+  if($ds>=20*3600 && PVB_N("acc_wp_wh",0)>=2000) {
+    my $tot=PVB_N("acc_wp_wh",0); my $n=PVB_N("wp_sh_n",0);
+    my $a=1/($n+1); $a=0.1 if($a<0.1);
+    for(my $h=0;$h<24;$h++) {
+      my $k=sprintf("wp_sh_%02d",$h);
+      PVB_W($k,sprintf("%.4f",(1-$a)*PVB_N($k,1/24)+$a*PVB_N(sprintf("acc_wp_%02d",$h),0)/$tot));
+    }
+    PVB_W("wp_sh_n",$n+1);
+  }
   my $haus=PVB_N("acc_dlast_wh",0)/1000; my $prof=PVB_N("acc_prof_wh",0)/1000;
   my $txt=sprintf("%s PV Ist %.1f / Prog %.1f kWh (%s) | Haus Ist %.1f / Profil %.1f kWh | WP Ist %.1f / Modell %.1f kWh (Gradtage %.1f) | SOC Sonnenunterg. %s, Nacht-Min %s | Ampel-Min gruen/gelb/rot %d/%d/%d",
     $ymd,$ist,$fcm,($ratio>=0?sprintf("%.0f%%",$ratio*100):"n/a"),$haus,$prof,
@@ -191,6 +201,7 @@ sub PVB_daycl($) {
 }
 sub PVB_reset_day() {
   PVB_W(sprintf("acc_pv_%02d",$_),0) for 0..23;
+  PVB_W(sprintf("acc_wp_%02d",$_),0) for 0..23;
   PVB_W($_,0) for qw(acc_wp_wh acc_ta acc_day_s acc_dlast_wh acc_prof_wh n_gruen n_gelb n_rot acc_hlast_s acc_hlast_wh);
   PVB_W("acc_start_h",""); PVB_W("fcm_day",""); PVB_W("soc_sunset_day",""); PVB_W("soc_sunset","-");
 }
@@ -250,7 +261,16 @@ sub PVB_budget($) {
     $l+=$z*sqrt($v) if($q eq "p10");
     return $l/1000; };
 
-  my (%U,%Dz,%Hh);
+  # WP-Bedarf je Stunde: Tagesmodell (a + b*Gradtage des jeweiligen Tages) x gelernter Stundenanteil
+  my @tmd=( PVB_tmean(0), PVB_tmean(1) );
+  my @hdd=map { PVB_clip(PVB_tbase()-$_,0,40) } @tmd;
+  my $wpt=sub { my ($t,$q)=@_; my $d=$t<24?0:1; my $h=$t%24;
+    my $day=PVB_N("wp_a",3)+PVB_N("wp_b",1.5)*$hdd[$d];
+    my $e=$day*PVB_N(sprintf("wp_sh_%02d",$h),1/24);
+    $e*=1+$z*PVB_P("wp_unsich",0.3) if($q eq "p10");
+    return $e; };                                     # kWh in Stunde t
+
+  my (%U,%Dz,%Hh,%Wz);
   my $ts=$night?$lh:int(($ss0+59)/60); $ts=$lh if($ts<$lh);
   my $dstop=$dayoff?24:0;
   foreach my $q ("p10","p50") {
@@ -258,19 +278,18 @@ sub PVB_budget($) {
     for(my $t=$lh;$t<=23;$t++) { my $fr=($t==$lh)?(60-$lm)/60:1;
       my $x=($pv->($t,$q)-$ld->($t,$q))*$fr; $u+=$x if($x>0); }
     $U{$q}=$u;
-    my ($ds,$hh)=(0,0);
+    my ($ds,$hh,$ws)=(0,0,0);
     for(my $t=$ts;$t<=47;$t++) { my $fr=($t==$lh)?(60-$lm)/60:1;
-      my $p=$pv->($t,$q); my $l=$ld->($t,$q);
-      last if($t>=$dstop && $p>=$l);
-      $ds+=($l-$p)*$fr if($l>$p); $hh+=$fr; }
-    $Dz{$q}=$ds; $Hh{$q}=$hh;
+      my $p=$pv->($t,$q); my $l=$ld->($t,$q); my $w=$wpt->($t,$q);
+      last if($t>=$dstop && $p>=$l);                  # Ende: PV deckt wieder die Hauslast
+      my $tot=$l+$w;                                   # Gesamtlast Haus + WP
+      $ds+=($tot-$p)*$fr if($tot>$p); $ws+=$w*$fr; $hh+=$fr; }
+    $Dz{$q}=$ds; $Hh{$q}=$hh; $Wz{$q}=$ws;
   }
   # WP-Bedarf des Bezugstags (Heizbedarf aus DWD) und Anteil vor PV-Uebernahme
   my $tm=PVB_tmean($dayoff); my $hdd=PVB_clip(PVB_tbase()-$tm,0,40);
   my $wpD=PVB_N("wp_a",3)+PVB_N("wp_b",1.5)*$hdd;
   my $pvD=0; $pvD+=$pv->($dayoff*24+$_,"p50") for 0..23;
-  my $weak=PVB_clip(1-$pvD/PVB_P("pv_gut_kwh",20),0.2,1);
-  my $anl=$wpD*PVB_P("frueh_anteil",0.25)*$weak;
 
   # Akku
   my $soc=ReadingsNum("GoodWe","SOC",0);
@@ -282,7 +301,7 @@ sub PVB_budget($) {
 
   my (%need,%tag,%jetzt,%bud);
   foreach my $q ("p10","p50") {
-    $need{$q}=$Dz{$q}+$anl+$res;
+    $need{$q}=$Dz{$q}+$res;
     $tag{$q}=$eb+$eta*$U{$q}-($need{$q}<$cn?$need{$q}:$cn);
     $jetzt{$q}=$eb-$need{$q};
     $bud{$q}=$night?($jetzt{$q}<$tag{$q}?$jetzt{$q}:$tag{$q}):$tag{$q};
@@ -300,8 +319,8 @@ sub PVB_budget($) {
   my $wpw=($ampel eq "gruen")?$pw->($bud{p10}):0;
   my $wpw50=$pw->($bud{p50});
 
-  my $grund=sprintf("%s [%s]: Budget P10 %+.1f / P50 %+.1f kWh | Akku %.1f + PV-Rest %.1f*%.2f | Bedarf %.1f (Nacht-Defizit %.1f, Morgen-WP %.1f, Reserve %.1f) | k_live %.2f, sigma %.2f (n=%d), Last-Korr %.2f | Horizont %.1f h -> WP-Budget %d W",
-    $ampel,$night?"Nacht":"Tag",$bud{p10},$bud{p50},$eb,$U{p10},$eta,$need{p10},$Dz{p10},$anl,$res,$kl,$sd,$sn,$klast,$hor,$wpw);
+  my $grund=sprintf("%s [%s]: Budget P10 %+.1f / P50 %+.1f kWh | Akku %.1f + PV-Rest %.1f*%.2f | Bedarf %.1f (Defizit bis PV-Uebernahme %.1f davon WP %.1f, Reserve %.1f) | k_live %.2f, sigma %.2f (n=%d), Last-Korr %.2f | Horizont %.1f h -> WP-Budget %d W",
+    $ampel,$night?"Nacht":"Tag",$bud{p10},$bud{p50},$eb,$U{p10},$eta,$need{p10},$Dz{p10},$Wz{p10},$res,$kl,$sd,$sn,$klast,$hor,$wpw);
 
   my $h=$defs{$PVB}; my $ampel_alt=PVB_V("ampel","");
   readingsBeginUpdate($h);
@@ -311,7 +330,7 @@ sub PVB_budget($) {
     ueberschuss_rest_p50=>sprintf("%.2f",$U{p50}), nacht_defizit_p10=>sprintf("%.2f",$Dz{p10}),
     nacht_defizit_p50=>sprintf("%.2f",$Dz{p50}), horizont_h=>sprintf("%.1f",$hor),
     gradtage_bezug=>sprintf("%.1f",$hdd), tmean_bezug=>sprintf("%.1f",$tm), wp_bezugstag_kwh=>sprintf("%.1f",$wpD),
-    pv_bezugstag_p50=>sprintf("%.1f",$pvD), wp_anlauf_kwh=>sprintf("%.2f",$anl),
+    pv_bezugstag_p50=>sprintf("%.1f",$pvD), wp_fenster_p10=>sprintf("%.2f",$Wz{p10}), wp_fenster_p50=>sprintf("%.2f",$Wz{p50}),
     akku_verf_kwh=>sprintf("%.2f",$eb), akku_nutz_kwh=>sprintf("%.2f",$cn),
     bedarf_p10=>sprintf("%.2f",$need{p10}), bedarf_p50=>sprintf("%.2f",$need{p50}),
     budget_tag_p10=>sprintf("%.2f",$tag{p10}), budget_jetzt_p10=>sprintf("%.2f",$jetzt{p10}),
@@ -332,7 +351,7 @@ sub PVB_budget($) {
   return { ampel=>$ampel, alt=>$ampel_alt, row=>[
     sprintf("%.2f",$bud{p10}),sprintf("%.2f",$bud{p50}),sprintf("%.2f",$jetzt{p10}),$wpw,$soc,
     sprintf("%.2f",$eb),sprintf("%.2f",$U{p10}),sprintf("%.2f",$U{p50}),sprintf("%.2f",$Dz{p10}),
-    sprintf("%.2f",$Dz{p50}),sprintf("%.2f",$anl),sprintf("%.2f",$fc_rest*$kl),sprintf("%.3f",$kl),
+    sprintf("%.2f",$Dz{p50}),sprintf("%.2f",$Wz{p10}),sprintf("%.2f",$fc_rest*$kl),sprintf("%.3f",$kl),
     sprintf("%.3f",$sd),sprintf("%.1f",$wpD),sprintf("%.1f",$pvD),sprintf("%.1f",$tm),$night?"nacht":"tag",
     $grund ] };
 }
@@ -371,6 +390,7 @@ sub PVB_tick() {
     PVB_W("acc_hlast_s",PVB_N("acc_hlast_s",0)+$dt);
     PVB_W("acc_dlast_wh",PVB_N("acc_dlast_wh",0)+$last*$dt/3600);
     PVB_W("acc_wp_wh",PVB_N("acc_wp_wh",0)+$wp*$dt/3600);
+    my $kw=sprintf("acc_wp_%02d",$lh); PVB_W($kw,PVB_N($kw,0)+$wp*$dt/3600);
     PVB_W("acc_ta",PVB_N("acc_ta",0)+$ta*$dt);
     PVB_W("acc_day_s",PVB_N("acc_day_s",0)+$dt);
   }
@@ -381,7 +401,7 @@ sub PVB_tick() {
   my $min=$lt[1];
   if($min%5==0 || $r->{ampel} ne $r->{alt}) {
     PVB_log(sprintf("%s/PV_Budget-%s.csv",$LOGDIR,strftime("%Y-%m",@lt)),
-      "zeit;budget_p10;budget_p50;budget_jetzt_p10;wp_budget_w;soc;akku_verf_kwh;uebersch_p10;uebersch_p50;def_p10;def_p50;anlauf;pv_rest_p50;k_live;sigma;wp_bezugstag;pv_bezugstag;tmean;modus;grund;ampel;pv_w;haus_w;wp_w;einspeis_w;ki_quelle;ki_heiz_voraus;ki_freigabe;verdichter",
+      "zeit;budget_p10;budget_p50;budget_jetzt_p10;wp_budget_w;soc;akku_verf_kwh;uebersch_p10;uebersch_p50;def_p10;def_p50;wp_fenster_p10;pv_rest_p50;k_live;sigma;wp_bezugstag;pv_bezugstag;tmean;modus;grund;ampel;pv_w;haus_w;wp_w;einspeis_w;ki_quelle;ki_heiz_voraus;ki_freigabe;verdichter",
       strftime("%Y-%m-%d %H:%M:%S",@lt),@{$r->{row}}[0..17],$r->{row}[18],$r->{ampel},
       int(ReadingsNum("HA_SDM630M_PV_Erzeugung","Gesamt_PV_Leistung_S9",0)),int($haus),int($wp),
       int(ReadingsNum("HA_SDM630M_Nergie","Einspeiseleistung",0)),
