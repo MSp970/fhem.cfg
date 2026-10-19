@@ -1,5 +1,5 @@
 diff --git a/A9/fhem.cfg b/A9/fhem.cfg
-index c44a72e..6f2d874 100644
+index c44a72e..afa8bd3 100644
 --- a/A9/fhem.cfg
 +++ b/A9/fhem.cfg
 @@ -10964,1233 +10964,6 @@ EMSPowerModeText \
@@ -1642,81 +1642,3 @@ index c44a72e..6f2d874 100644
  define FileLog_Garage_gross FileLog ./log/garage_gross-%Y-%m.log dingtian_relay84630:(i[1-8]|r[1-3]|lwt_availability|Lampe_vorne|Lampe_hinten|Torimpuls):.*|Garagentor_gross:.*|Garagentuer_gross:.*
  setuuid FileLog_Garage_gross 6aa8f9ac-f33f-0e4e-d833-c26a78e6228aedfb
  attr FileLog_Garage_gross room Garage
-@@ -18980,6 +17443,77 @@ if($RN->("sends_stunde",-1) != $lh)\
-   $q->("sends_stunde",$lh);;\
- }\
- \
-+if($lh == 12 && $R->("ad_tag","") ne $ymd)\
-+{\
-+  $q->("ad_tag",$ymd);;\
-+  my $AD_MIN = $P->("socMaxAdMin",80);;\
-+  my $AD_MAX = $P->("socMaxAdMax",98);;\
-+  my $AD_STEP = $P->("socMaxAdStep",2);;\
-+  my $T_NEUTRAL = $P->("socMaxAdTempNeutral",10);;\
-+  my $T_KALT = $P->("socMaxAdTempKalt",-5);;\
-+  my $PV_REF = $P->("socMaxAdPvRef",25);;\
-+  my $pv_rest = 0;;\
-+  for(my $i = $lh;; $i <= 22;; $i++)\
-+  {\
-+    $pv_rest += ReadingsNum($FC,sprintf("charge_curve_%02d",$i),0);;\
-+  }\
-+  my $pv_ges = ReadingsNum("HA_SDM630M_PV_Erzeugung","Erz_PV_Energie_kWh_day",0) + $pv_rest;;\
-+  my @hist = ();;\
-+  for(my $i = 0;; $i <= 6;; $i++)\
-+  {\
-+    my $hv = ReadingsNum($DEV,"ad_pv_d$i",-1);;\
-+    push @hist,$hv if($hv >= 0);;\
-+  }\
-+  my $avg7 = $pv_ges;;\
-+  if(@hist)\
-+  {\
-+    $avg7 = 0;;\
-+    $avg7 += $_ for @hist;;\
-+    $avg7 /= scalar(@hist);;\
-+  }\
-+  for(my $i = 5;; $i >= 0;; $i--)\
-+  {\
-+    my $hv = ReadingsNum($DEV,"ad_pv_d$i",-1);;\
-+    $q->("ad_pv_d".($i + 1),$hv) if($hv >= 0);;\
-+  }\
-+  $q->("ad_pv_d0",sprintf("%.2f",$pv_ges));;\
-+  my $pvf = ($PV_REF > 0) ? 1 - $avg7 / $PV_REF : 0;;\
-+  $pvf = 0 if($pvf < 0);;\
-+  $pvf = 1 if($pvf > 1);;\
-+  my $ta = ReadingsNum("LambdaWP","AmbientTempAvg",10);;\
-+  my $tf = 0;;\
-+  if($ta < $T_NEUTRAL)\
-+  {\
-+    $tf = ($T_NEUTRAL - $ta) / ($T_NEUTRAL - $T_KALT);;\
-+    $tf = 0 if($tf < 0);;\
-+    $tf = 1 if($tf > 1);;\
-+  }\
-+  my $kf = $pvf * 0.7 + $tf * 0.3;;\
-+  my $ziel = int($AD_MIN + ($AD_MAX - $AD_MIN) * $kf + 0.5);;\
-+  my $alt = (ReadingsNum($EM,"socMax1",$AD_MIN) + ReadingsNum($EM,"socMax2",$AD_MIN)) / 2;;\
-+  my $neu = $ziel;;\
-+  $neu = $alt + $AD_STEP if($ziel > $alt + $AD_STEP);;\
-+  $neu = $alt - $AD_STEP if($ziel < $alt - $AD_STEP);;\
-+  $neu = $AD_MIN if($neu < $AD_MIN);;\
-+  $neu = $AD_MAX if($neu > $AD_MAX);;\
-+  $neu = int($neu + 0.5);;\
-+  if($AKTIV)\
-+  {\
-+    fhem("setreading $EM socMax1 $neu");;\
-+    fhem("setreading $EM socMax2 $neu");;\
-+  }\
-+  $q->("ad_ziel",$ziel);;\
-+  $q->("ad_alt",sprintf("%.1f",$alt));;\
-+  $q->("ad_neu",$neu);;\
-+  $q->("ad_pv_avg7",sprintf("%.2f",$avg7));;\
-+  $q->("ad_pv_faktor",sprintf("%.2f",$pvf));;\
-+  $q->("ad_temp_faktor",sprintf("%.2f",$tf));;\
-+  $q->("ad_kombi",sprintf("%.2f",$kf));;\
-+  $q->("ad_aussentemp",sprintf("%.1f",$ta));;\
-+  $w->("ad_grund",sprintf("%s: PV 7d-Mittel %.1f kWh (Faktor %.2f), Aussen %.1f C (Faktor %.2f) -> Ziel %d, alt %.1f -> neu %d%s",\
-+    $ymd,$avg7,$pvf,$ta,$tf,$ziel,$alt,$neu,$AKTIV ? "" : " [nur Beobachtung, v2Aktiv=0]"));;\
-+  $ts->("ad_lauf");;\
-+}\
- my %d = ();;\
- my $sum_verf = 0;;\
- my $sum_frei = 0;;\

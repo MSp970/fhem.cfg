@@ -1,5 +1,5 @@
 diff --git a/S9/fhem.cfg b/S9/fhem.cfg
-index dc22b3a..662d08c 100644
+index e447b90..e0d3550 100644
 --- a/S9/fhem.cfg
 +++ b/S9/fhem.cfg
 @@ -16112,61 +16112,6 @@ setuuid notify_Bat_max_Ladestrom_set 69cfa0f1-f33f-5756-933f-8eb791b7e5bc7e21

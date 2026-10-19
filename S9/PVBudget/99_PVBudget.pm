@@ -306,7 +306,7 @@ sub PVB_budget($) {
     $smax=ReadingsNum("DOIF_GoodWe_v2","vollladen_rest",0)>0 ? 100 : $ems_max;
     $zq="Ersatz: EMS_Control socMax1 (v2 socmax_eff fehlt/alt)";
   }
-  my $zhint = ($ems_max<$smax) ? "v2-Ziel $smax% liegt ueber socMax1 $ems_max% (v2 smax_prog: ".ReadingsVal("DOIF_GoodWe_v2","smax_prog","-")."%)" : "ok";
+  my $zhint = ($ems_max<$smax) ? "v2-Ziel $smax% liegt ueber socMax1 $ems_max%" : "ok";
   my $cn=($smax-$smin)/100*$cap; $cn=0 if($cn<0);
   my $eta=PVB_P("eta",0.9); my $res=PVB_P("res_kwh",0.5);
 
