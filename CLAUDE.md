@@ -17,3 +17,10 @@
   mit dem realen Verhalten in die Steuerung einbinden.
 - Neue Logik braucht klare Readings, ein Log und einen Klartext-Grund (Nachvollziehbarkeit).
 - Antworten auf Deutsch.
+
+## Batterie-Regelung
+- `DOIF_GoodWe_v2` ist der einzige Regler für den GoodWe-Wechselrichter. `DOIF_GoodWe_simple` und
+  `DOIF_Batterie_Ladestrom_Max` sind entfernt und dürfen nicht wieder eingeführt werden.
+- v2 sendet nur bei `EMS_Control:v2Aktiv = 1`, sonst beobachtet es nur.
+- Das Ladeziel (`socmax_eff`) wird ausschließlich in v2 berechnet (`socMax1`, `smax_prog`, `vollladen_rest`).
+  Das PVBudget-Modul liest es nur.

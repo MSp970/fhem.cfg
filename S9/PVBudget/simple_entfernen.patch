@@ -1,0 +1,985 @@
+diff --git a/S9/fhem.cfg b/S9/fhem.cfg
+index dc22b3a..662d08c 100644
+--- a/S9/fhem.cfg
++++ b/S9/fhem.cfg
+@@ -16112,61 +16112,6 @@ setuuid notify_Bat_max_Ladestrom_set 69cfa0f1-f33f-5756-933f-8eb791b7e5bc7e21
+ attr notify_Bat_max_Ladestrom_set event-on-change-reading .*
+ attr notify_Bat_max_Ladestrom_set group Batt_control
+ attr notify_Bat_max_Ladestrom_set room 01 PV
+-define DOIF_Batterie_Ladestrom_Max DOIF ([DOIF_GoodWe_simple:p1] or [+00:00:15])\
+-(\
+-{\
+-  my $DEV = "DOIF_Batterie_Ladestrom_Max";;\
+-  my $WR  = "GoodWe";;\
+-  my $now = int(time());;\
+-  my $last_exec =\
+-    ReadingsNum($DEV,"last_exec",0);;\
+-  return if(($now - $last_exec) < 2);;\
+-\
+-  my $p = ReadingsNum(\
+-    "DOIF_GoodWe_simple","p1",0);;\
+-  my $u = ReadingsNum(\
+-    $WR,"Battery1_Voltage",0);;\
+-  my $mode = ReadingsNum(\
+-    $WR,"EMSPowerMode",1);;\
+-\
+-  return if($u < 10);;\
+-  $p = 0 if($p < 50);;\
+-\
+-  my $i_ziel = 0;;\
+-  if($p > 0)\
+-  {\
+-    $i_ziel = $p / $u;;\
+-    $i_ziel = $i_ziel * 1.1 + 0.1\
+-      if($mode != 1);;\
+-    $i_ziel = 0.1 if($i_ziel < 0.1);;\
+-  }\
+-\
+-  my $i_last =\
+-    ReadingsNum($DEV,"last_i",-1);;\
+-  if($i_last >= 0\
+-     && $i_ziel > $i_last + 0.3)\
+-  {\
+-    $i_ziel = $i_last + 0.3;;\
+-  }\
+-\
+-  my $i = sprintf("%.1f", $i_ziel);;\
+-\
+-  if(abs($i - $i_last) >= 0.1)\
+-  {\
+-    fhem("set $WR ".\
+-      "Batterie_Ladestrom_Max $i");;\
+-    fhem("setreading $DEV last_i $i");;\
+-    fhem("setreading $DEV ".\
+-      "Batterie_Ladestrom_MaxGoodWe $i");;\
+-  }\
+-\
+-  fhem("setreading $DEV last_exec $now");;\
+-}\
+-)
+-setuuid DOIF_Batterie_Ladestrom_Max 69cfa2b6-f33f-5756-7c50-c00144f8e27b8251
+-attr DOIF_Batterie_Ladestrom_Max do always
+-attr DOIF_Batterie_Ladestrom_Max room 01 PV
+-attr DOIF_Batterie_Ladestrom_Max userReadings last_exec_hr:last_exec.* {my $t=ReadingsNum("DOIF_Batterie_Ladestrom_Max","last_exec",0);; $t>0?FmtDateTime($t):"-"}
+ define DOIF_SOC_min_frueh_speichern DOIF (\
+  [05:00]\
+ )\
+@@ -16383,887 +16328,6 @@ define DOIF_Mythz_Poll DOIF ([1s_2s_timer] or [10s_20s_timer])\
+ setuuid DOIF_Mythz_Poll 69f9f73b-f33f-5756-ae14-3301ce680e8745ed
+ attr DOIF_Mythz_Poll do always
+ attr DOIF_Mythz_Poll room THZ
+-define DOIF_GoodWe_simple DOIF ([HA_SDM630M_Nergie:"^Power_Sum__W1:"] or [+00:00:10])\
+-{\
+-  use Time::Local;;\
+-  use POSIX qw(mktime);;\
+-  my $now = time();;\
+-  my ($sec,$min,$hour,$mday,$mon,$year) =\
+-      localtime($now);;\
+-  my $DEV = "DOIF_GoodWe_simple";;\
+-  my $WR = "GoodWe";;\
+-  my $EINSPEIS_ZIEL_W_NACHT =\
+-      ReadingsNum("EMS_Control","einspeisZielNacht",\
+-      50);;\
+-  my $EINSPEIS_ZIEL_W_UEBERG =\
+-      ReadingsNum("EMS_Control",\
+-      "einspeisZielUebergang",20);;\
+-  my $EINSPEIS_ZIEL_W = $EINSPEIS_ZIEL_W_NACHT;;\
+-  my $WP_LEISTUNG_MIN_KW = 0.10;;\
+-  my $WP_LEISTUNG_MIN_KW_OFF = 0.05;;\
+-  my $TAGESWECHSEL_HOUR = 6;;\
+-  my $FORECAST_EVAL_HOUR = 9;;\
+-  my $clip_limit = ReadingsNum("EMS_Control",\
+-      "clipLimit",20000);;\
+-  my $Ki_dis = 0.05;;\
+-  my $TRIM_INTERVAL_S = 15;;\
+-  my $TRIM_STEP_MAX = 25;;\
+-  my $TRIM_TOTBAND_W = 20;;\
+-  my $ALPHA_60S = 0.3;;\
+-  my $RESERVE_FAKTOR = 1.15;;\
+-  my $SOCMAX_KNAPP = 95;;\
+-  my $SOCMAX_MITTEL = 88;;\
+-  my $SOCMAX_UEPPIG = 80;;\
+-  my $SOFT_START_W = 500;;\
+-  my $CATCHUP_SOC_DELTA = ReadingsNum("EMS_Control",\
+-      "catchUpSocDelta",3);;\
+-  my $CATCHUP_SURPLUS_MIN = ReadingsNum("EMS_Control",\
+-      "catchUpSurplusMin",1000);;\
+-  my $SEND_WATT_SCHWELLE_C = 100;;\
+-  my $SEND_WATT_SCHWELLE_D = 50;;\
+-  my $SEND_MIN_INTERVAL_C = 5;;\
+-  my $SEND_MIN_INTERVAL_D = 5;;\
+-  my $BEZUG_SOFORT_W = ReadingsNum("EMS_Control",\
+-      "bezugSofortW",50);;\
+-  my $BEZUG_MARGE_W = ReadingsNum("EMS_Control",\
+-      "bezugMargeW",50);;\
+-  my $BEZUG_HOLD_S = ReadingsNum("EMS_Control",\
+-      "bezugSofortHoldS",15);;\
+-  my $start_str =\
+-      ReadingsVal("DOIF_PV_forecast_Batterie_laden",\
+-      "charge_start_time","00:00:00");;\
+-  my ($sh,$sm,$ss) = split(":",$start_str);;\
+-  my $start_epoch = timelocal($ss,$sm,$sh,$mday,$mon,\
+-      $year);;\
+-  my $bat1 = ReadingsNum($WR,"Power_Battery",0);;\
+-  my $real_total = ($bat1 < 0) ? -$bat1 : 0;;\
+-  my $cap1 = ReadingsNum("EMS_Control","capacity1",10);;\
+-  my $max1 = ReadingsNum("EMS_Control","maxPower1",\
+-      3000);;\
+-  my $soc1 = ReadingsNum($WR,"SOC",100);;\
+-  my $socMax1 = ReadingsNum("EMS_Control","socMax1",\
+-      80);;\
+-  my $socMin1 = ReadingsNum("EMS_Control","socMin1",\
+-      10);;\
+-  my $max_discharge1 = ReadingsNum("EMS_Control",\
+-      "maxDischargePower1",3000);;\
+-  my $min_pv_for_export = ReadingsNum("EMS_Control",\
+-      "minPvForExport",2000);;\
+-  my $discharge_deadband = 150;;\
+-  my $grid = ReadingsNum("HA_SDM630M_Nergie",\
+-      "Power_Sum__W1",0);;\
+-  my $einspeis = ReadingsNum("HA_SDM630M_Nergie",\
+-      "Einspeiseleistung",0);;\
+-  my $bezug = ReadingsNum("HA_SDM630M_Nergie",\
+-      "Bezugsleistung",0);;\
+-  my $surplus = $einspeis - $bezug;;\
+-  my $grundlast_raw = ReadingsNum("HA_SDM630M_Nergie",\
+-      "Summe_Leistungsbezug_Haus_gesamt",0);;\
+-  my $pv_power = ReadingsNum($WR,"PV_S9_Total_Power",\
+-      0);;\
+-  my $wp_leistung = ReadingsNum("LambdaWP",\
+-      "HP_akt_elektr_Leistungsaufnahme",0);;\
+-  my $wp_war_an_prev = ReadingsNum($DEV,"wp_war_an",0);;\
+-  my $wp_laeuft;;\
+-  if($wp_war_an_prev)\
+-  {\
+-    $wp_laeuft = ($wp_leistung >=\
+-        $WP_LEISTUNG_MIN_KW_OFF) ? 1 : 0;;\
+-  }\
+-  else\
+-  {\
+-    $wp_laeuft = ($wp_leistung >= $WP_LEISTUNG_MIN_KW)\
+-        ? 1 : 0;;\
+-  }\
+-  my $wp_leistung_w = $wp_leistung * 1000;;\
+-  my $ev_leistung_aktuell = ReadingsNum("OpenWB",\
+-      "Ladepunkt_Leistung",0);;\
+-  my $ev_laedt_aktuell = (ReadingsVal("OpenWB",\
+-      "Ladepunkt_charge_state","False") eq "True" &&\
+-      $ev_leistung_aktuell > 200) ? 1 : 0;;\
+-  my $ev_w_aktuell = $ev_laedt_aktuell ?\
+-      $ev_leistung_aktuell : 0;;\
+-  my $grundlast_raw_ohne_ev = ($grundlast_raw -\
+-      $ev_w_aktuell);;\
+-  $grundlast_raw_ohne_ev = 0 if($grundlast_raw_ohne_ev\
+-      < 0);;\
+-  my $grundlast_60s_ohne_ev_alt = ReadingsNum($DEV,\
+-      "grundlast_60s_ohne_ev",$grundlast_raw_ohne_ev);;\
+-  my $grundlast_60s_ohne_ev = int($ALPHA_60S *\
+-      $grundlast_raw_ohne_ev + (1 - $ALPHA_60S) *\
+-      $grundlast_60s_ohne_ev_alt);;\
+-  my $grundlast_5min_alt = ReadingsNum($DEV,\
+-      "grundlast_5min",$grundlast_raw);;\
+-  my $gl_last_t = ReadingsNum($DEV,"gl_last_t",$now);;\
+-  my $grundlast_5min;;\
+-  if(($now - $gl_last_t) >= 5)\
+-  {\
+-    my $alpha = 0.05;;\
+-    $grundlast_5min = int($alpha * $grundlast_raw + (1\
+-        - $alpha) * $grundlast_5min_alt);;\
+-    fhem("setreading $DEV grundlast_5min ".int($grundlast_5min));;\
+-    fhem("setreading $DEV gl_last_t ".int($now));;\
+-  }\
+-  else\
+-  {\
+-    $grundlast_5min = $grundlast_5min_alt;;\
+-  }\
+-  my $charged1 = ($soc1 >= $socMax1) ? 1 : 0;;\
+-  my $lade_bedarf = (!$charged1) ? 1 : 0;;\
+-  my $bat_voll = $charged1;;\
+-  my $forecast_heute =\
+-      ReadingsNum("DOIF_PV_forecast_Batterie_laden",\
+-      "forecast_today_kwh",0);;\
+-  my $forecast_wh_global = $forecast_heute * 1000;;\
+-  my $nacht_bedarf_kwh =\
+-      ReadingsNum("DOIF_PV_forecast_Batterie_laden",\
+-      "nacht_verbrauch_forecast_kwh",0);;\
+-  my $nacht_bedarf_wh = $nacht_bedarf_kwh * 1000;;\
+-  my $bat_leer_wh_global = int(($socMax1 - $soc1) / 100\
+-      * $cap1 * 1000);;\
+-  my $today_forecast_eval_epoch = mktime(0, 0,\
+-      $FORECAST_EVAL_HOUR, $mday, $mon, $year);;\
+-  my $last_forecast_eval_epoch = ReadingsNum($DEV,\
+-      "last_forecast_eval_epoch",0);;\
+-  if($now >= $today_forecast_eval_epoch &&\
+-      $last_forecast_eval_epoch <\
+-      $today_forecast_eval_epoch && $nacht_bedarf_wh >\
+-      0)\
+-  {\
+-    my $tagesverbrauch_estimate_wh = 0;;\
+-    for(my $h = $FORECAST_EVAL_HOUR;;\
+-    $h <= 21;;\
+-    $h++)\
+-    {\
+-      my $key = sprintf("grundlast_h%02d_ohne_ev",$h);;\
+-      my $val = ReadingsNum("DOIF_Grundlast_Profil",\
+-          $key,400);;\
+-      $tagesverbrauch_estimate_wh += $val;;\
+-    }\
+-    my $forecast_uebrig_wh = $forecast_wh_global -\
+-        $tagesverbrauch_estimate_wh;;\
+-    $forecast_uebrig_wh = 0 if($forecast_uebrig_wh <\
+-        0);;\
+-    my $bedarf_inkl_reserve_wh_eval =\
+-        int($nacht_bedarf_wh * $RESERVE_FAKTOR);;\
+-    my $socMax_neu;;\
+-    if($forecast_uebrig_wh <\
+-        $bedarf_inkl_reserve_wh_eval)\
+-    {\
+-      $socMax_neu = $SOCMAX_KNAPP;;\
+-    }\
+-    elsif($forecast_uebrig_wh <\
+-        int($bedarf_inkl_reserve_wh_eval * 1.5))\
+-    {\
+-      $socMax_neu = $SOCMAX_MITTEL;;\
+-    }\
+-    else\
+-    {\
+-      $socMax_neu = $SOCMAX_UEPPIG;;\
+-    }\
+-    fhem("setreading EMS_Control socMax1 $socMax_neu");;\
+-    fhem("setreading $DEV last_forecast_eval_epoch ".int($now));;\
+-  }\
+-  my $hour_key = sprintf("charge_curve_%02d",$hour);;\
+-  my $curve_kw =\
+-      ReadingsNum("DOIF_PV_forecast_Batterie_laden",\
+-      $hour_key,0);;\
+-  my $target_power = int($curve_kw * 1000);;\
+-  my $clip_power = 0;;\
+-  if($surplus > ($clip_limit + 500))\
+-  {\
+-    $clip_power = $surplus - $clip_limit;;\
+-    $target_power += int($clip_power * 0.6);;\
+-  }\
+-  my $pv_vorhanden = ($pv_power > 50 || $einspeis >\
+-      50);;\
+-  my $ev_leistung = $ev_leistung_aktuell;;\
+-  my $ev_reserve = ReadingsNum("EMS_Control",\
+-      "pvReserve",1000);;\
+-  my $ev_laedt = $ev_laedt_aktuell;;\
+-  my $pv_nach_ev = $pv_power - $ev_leistung -\
+-      $ev_reserve;;\
+-  my $pv_active_last = ReadingsNum($DEV,"pv_active",0);;\
+-  my $pv_active;;\
+-  if($pv_active_last)\
+-  {\
+-    $pv_active = ($pv_power >= 150 || $einspeis >=\
+-        150);;\
+-  }\
+-  else\
+-  {\
+-    $pv_active = ($pv_power >= 300 || $einspeis >=\
+-        300);;\
+-  }\
+-  my $mode1_last = ReadingsNum($DEV,"mode1",0);;\
+-  my $mode1 = $mode1_last ? ($einspeis >= 2000) :\
+-      ($einspeis >= 2500);;\
+-  my $entladen_erlaubt = ReadingsNum($DEV,\
+-      "entladen_erlaubt",1);;\
+-  my $einspeis_aktiv = ReadingsNum($DEV,\
+-      "einspeis_aktiv",1);;\
+-  my $soc_nacht_noetig = ReadingsNum($DEV,\
+-      "soc_nacht_noetig",5);;\
+-  my $soc_ok = ($soc1 > $socMin1);;\
+-  my $soc_ok_nacht = $soc_ok && ($soc1 >\
+-      $soc_nacht_noetig);;\
+-  my $schlechter_tag_fc =\
+-      ReadingsNum("DOIF_PV_forecast_Batterie_laden",\
+-      "debug_schlechter_tag",1);;\
+-  my $genug_pv_tag = ($schlechter_tag_fc == 0) ? 1 : 0;;\
+-  my $halten_aktiv = ( $genug_pv_tag && $pv_active &&\
+-      ($now < $start_epoch) && ($hour >=\
+-      $TAGESWECHSEL_HOUR) && ($soc1 < $socMax1) ) ? 1 :\
+-      0;;\
+-  my $pv_ueber_grundlast = $pv_power -\
+-      $grundlast_60s_ohne_ev;;\
+-  my $allow_charge = ( ( !$ev_laedt && ( (\
+-      $target_power > 50 && ($now >= $start_epoch ||\
+-      (!$genug_pv_tag && $surplus > 1500)) &&\
+-      ($pv_power > 300 || $einspeis > 300) &&\
+-      $pv_vorhanden && $lade_bedarf ) || ( ($pv_power >\
+-      200 || $einspeis > 200) && $surplus > 200 &&\
+-      $lade_bedarf && $forecast_wh_global == 0 ) || (\
+-      $forecast_wh_global > 0 && $forecast_wh_global <\
+-      $bat_leer_wh_global && $surplus > 500 &&\
+-      $lade_bedarf ) || ( $genug_pv_tag && ($now >=\
+-      $start_epoch) && ($pv_power > 300 || $einspeis >\
+-      300) && ($pv_ueber_grundlast > 200) &&\
+-      $lade_bedarf ) ) ) || ( $ev_laedt && $pv_nach_ev\
+-      > 500 && $lade_bedarf ) );;\
+-  my $allow_discharge = ( !$pv_active &&\
+-      $entladen_erlaubt && $soc_ok_nacht );;\
+-  my $morgen_aktiv = ( $pv_active && !$allow_charge &&\
+-      !$mode1 && $surplus < 500 && $hour >=\
+-      $TAGESWECHSEL_HOUR && $hour < 11 &&\
+-      !$allow_discharge );;\
+-  my $abend_aktiv = ( $pv_active && $surplus < 0 &&\
+-      $hour >= 15 && !$allow_charge && !$mode1 );;\
+-  my $today_rotate_epoch = mktime(0, 0,\
+-      $TAGESWECHSEL_HOUR, $mday, $mon, $year);;\
+-  my $pv_latch = ReadingsNum($DEV,\
+-      "pv_ueber_verbrauch_latch",0);;\
+-  my $pv_latch_epoch = ReadingsNum($DEV,\
+-      "pv_latch_reset_epoch",0);;\
+-  if($now >= $today_rotate_epoch && $pv_latch_epoch <\
+-      $today_rotate_epoch)\
+-  {\
+-    $pv_latch = 0;;\
+-    fhem("setreading $DEV pv_ueber_verbrauch_latch 0");;\
+-    fhem("setreading $DEV pv_latch_reset_epoch ".int($now));;\
+-  }\
+-  my $PV_LATCH_MIN_W = ReadingsNum("EMS_Control",\
+-      "pvLatchMinW",300);;\
+-  if(!$pv_latch && $hour >= $TAGESWECHSEL_HOUR &&\
+-      ($pv_power > $grundlast_raw || $pv_power >\
+-      $PV_LATCH_MIN_W))\
+-  {\
+-    $pv_latch = 1;;\
+-    fhem("setreading $DEV pv_ueber_verbrauch_latch 1");;\
+-  }\
+-  my $SOCMAX_MIN = 80;;\
+-  my $SOCMAX_MAX = 98;;\
+-  my $SOCMIN_TRIGGER = 25;;\
+-  my $last_socmax_epoch = ReadingsNum($DEV,\
+-      "last_socmax_epoch",0);;\
+-  if($now >= $today_rotate_epoch && $last_socmax_epoch\
+-      < $today_rotate_epoch)\
+-  {\
+-    my $delta = 0;;\
+-    if($soc1 <= $SOCMIN_TRIGGER)\
+-    {\
+-      $delta = $SOCMIN_TRIGGER - $soc1;;\
+-      $delta = 1 if($delta < 1);;\
+-    }\
+-    else\
+-    {\
+-      $delta = -int(($soc1 - $SOCMIN_TRIGGER) / 2);;\
+-      $delta = -1 if($delta > -1);;\
+-    }\
+-    my $socMax_neu = $socMax1 + $delta;;\
+-    $socMax_neu = $SOCMAX_MIN if($socMax_neu <\
+-        $SOCMAX_MIN);;\
+-    $socMax_neu = $SOCMAX_MAX if($socMax_neu >\
+-        $SOCMAX_MAX);;\
+-    if($socMax_neu != $socMax1)\
+-    {\
+-      fhem("setreading EMS_Control socMax1 $socMax_neu");;\
+-      $socMax1 = $socMax_neu;;\
+-    }\
+-    fhem("setreading $DEV last_socmax_epoch ".int($now));;\
+-  }\
+-  my $ziel_modus = "nacht";;\
+-  if($allow_charge)\
+-  {\
+-    $ziel_modus = "laden";;\
+-  }\
+-  elsif($halten_aktiv)\
+-  {\
+-    $ziel_modus = "halten";;\
+-  }\
+-  elsif($mode1)\
+-  {\
+-    $ziel_modus = "m1";;\
+-  }\
+-  elsif($bat_voll && $pv_active)\
+-  {\
+-    $ziel_modus = "m1";;\
+-  }\
+-  elsif($morgen_aktiv)\
+-  {\
+-    $ziel_modus = "morgen";;\
+-  }\
+-  elsif($abend_aktiv)\
+-  {\
+-    $ziel_modus = "abend";;\
+-  }\
+-  elsif($pv_active)\
+-  {\
+-    $ziel_modus = "uebergang";;\
+-  }\
+-  my $aktiver_modus = ReadingsVal($DEV,"aktiver_modus",\
+-      "nacht");;\
+-  my $letzter_ziel_modus = ReadingsVal($DEV,\
+-      "ziel_modus_last","");;\
+-  my $ziel_stabil_seit = ReadingsNum($DEV,\
+-      "ziel_stabil_seit",0);;\
+-  my $MODUS_HYSTERESE_S = 60;;\
+-  if($ziel_modus eq "laden")\
+-  {\
+-    $MODUS_HYSTERESE_S = 5;;\
+-  }\
+-  elsif($ziel_modus eq "m1")\
+-  {\
+-    $MODUS_HYSTERESE_S = ($aktiver_modus eq "m1") ? 5 :\
+-        30;;\
+-  }\
+-  elsif($ziel_modus eq "morgen")\
+-  {\
+-    $MODUS_HYSTERESE_S = 120;;\
+-  }\
+-  elsif($ziel_modus eq "abend")\
+-  {\
+-    $MODUS_HYSTERESE_S = 60;;\
+-  }\
+-  elsif($ziel_modus eq "uebergang")\
+-  {\
+-    $MODUS_HYSTERESE_S = 60;;\
+-  }\
+-  elsif($ziel_modus eq "halten")\
+-  {\
+-    $MODUS_HYSTERESE_S = 30;;\
+-  }\
+-  elsif($ziel_modus eq "nacht")\
+-  {\
+-    if($aktiver_modus eq "uebergang" || $aktiver_modus\
+-        eq "abend")\
+-    {\
+-      $MODUS_HYSTERESE_S = 300;;\
+-    }\
+-    else\
+-    {\
+-      $MODUS_HYSTERESE_S = 300;;\
+-    }\
+-  }\
+-  if($ziel_modus eq "uebergang" && ($aktiver_modus ne\
+-      "nacht" && $aktiver_modus ne "uebergang") &&\
+-      $bezug > 50)\
+-  {\
+-    $MODUS_HYSTERESE_S = 0;;\
+-  }\
+-  if($ziel_modus ne $letzter_ziel_modus)\
+-  {\
+-    fhem("setreading $DEV ziel_modus_last $ziel_modus");;\
+-    fhem("setreading $DEV ziel_stabil_seit ".int($now));;\
+-    $ziel_stabil_seit = $now;;\
+-  }\
+-  if(($now - $ziel_stabil_seit) >= $MODUS_HYSTERESE_S\
+-      || $aktiver_modus eq $ziel_modus)\
+-  {\
+-    if($aktiver_modus ne $ziel_modus)\
+-    {\
+-      fhem("setreading $DEV pi_i_term_c 0");;\
+-      fhem("setreading $DEV master_xset 0");;\
+-      fhem("setreading $DEV last_trim_t 0");;\
+-      fhem("setreading $DEV last_target_power 0");;\
+-      fhem("setreading $DEV last_mode_intern_charge 1");;\
+-    }\
+-    $aktiver_modus = $ziel_modus;;\
+-    fhem("setreading $DEV aktiver_modus $aktiver_modus");;\
+-  }\
+-  my $t_aussen = ReadingsNum("BresserWetter",\
+-      "temperatur_aussen",15);;\
+-  my $rad = ReadingsNum("BresserWetter",\
+-      "sonneneinstrahlung",0);;\
+-  my $v_pv1 = ReadingsNum($WR,"PV_1_Voltage",0);;\
+-  my $v_mpp = ReadingsNum("EMS_Control",\
+-      "mppVoltBase",541) -\
+-      ReadingsNum("EMS_Control","mppVoltTk",2.0) *\
+-      $t_aussen;;\
+-  my $mpp_margin = ReadingsNum("EMS_Control",\
+-      "mppVoltMargin",25);;\
+-  my $mpp_rad_min = ReadingsNum("EMS_Control",\
+-      "mppRadMin",150);;\
+-  my $mppt_frei = ($rad > $mpp_rad_min\
+-      && $v_pv1 > $v_mpp + $mpp_margin) ? 1 : 0;;\
+-  fhem("setreading $DEV mppt_frei $mppt_frei");;\
+-  fhem("setreading $DEV v_mpp_soll ".int($v_mpp));;\
+-  my $powermode = 1;;\
+-  my $p1 = 0;;\
+-  my $p_charge = 0;;\
+-  my $corr_total = 0;;\
+-  my $allow_charge_bat1 = ($allow_charge && !$charged1)\
+-      ? 1 : 0;;\
+-  my $Kp_c = 0.1;;\
+-  my $Ki_c = 0.01;;\
+-  my $i_max_c = 400;;\
+-  my $totband_c = 0.15;;\
+-  my $pi_interval = 5;;\
+-  my $i_term_c = ReadingsNum($DEV,"pi_i_term_c",0);;\
+-  my $last_pi_c = ReadingsNum($DEV,"last_pi_c",0);;\
+-  if($aktiver_modus eq "laden")\
+-  {\
+-    $powermode = 2;;\
+-    my $battery_space = int(($socMax1 - $soc1)/100 *\
+-        $cap1*1000);;\
+-    if($battery_space > 0 && $battery_space < 2000)\
+-    {\
+-      $target_power = int($target_power *\
+-          $battery_space / 2000);;\
+-    }\
+-    if($target_power < 200 && $pv_power > 200 &&\
+-        $surplus > 200)\
+-    {\
+-      $target_power = $surplus - 100;;\
+-    }\
+-    my $einspeis_ziel_laden;;\
+-    if($forecast_wh_global >= $bat_leer_wh_global +\
+-        1000)\
+-    {\
+-      $einspeis_ziel_laden = 1000;;\
+-    }\
+-    elsif($forecast_wh_global <= $bat_leer_wh_global)\
+-    {\
+-      $einspeis_ziel_laden = 0;;\
+-    }\
+-    else\
+-    {\
+-      $einspeis_ziel_laden = int(($forecast_wh_global -\
+-          $bat_leer_wh_global) / 1000 * 1000);;\
+-    }\
+-    if($forecast_wh_global == 0 && $pv_power > 500)\
+-    {\
+-      $einspeis_ziel_laden = 500;;\
+-    }\
+-    my $brutto_verfuegbar = $pv_power -\
+-        $grundlast_60s_ohne_ev - $ev_w_aktuell -\
+-        $einspeis_ziel_laden;;\
+-    $brutto_verfuegbar = 0 if($brutto_verfuegbar < 0);;\
+-    if($ev_laedt)\
+-    {\
+-      $target_power = $pv_nach_ev;;\
+-      $target_power = 0 if($target_power < 0);;\
+-    }\
+-    elsif($pv_power > $min_pv_for_export &&\
+-        $target_power > $brutto_verfuegbar)\
+-    {\
+-      $target_power = $brutto_verfuegbar;;\
+-    }\
+-    $target_power = $max1 if($target_power > $max1);;\
+-    my $einspeis_ueber = $einspeis -\
+-        $einspeis_ziel_laden;;\
+-    if($lade_bedarf && $einspeis_ueber > 50)\
+-    {\
+-      $target_power += int($einspeis_ueber * 0.5);;\
+-    }\
+-    if($bezug > 50)\
+-    {\
+-      $target_power -= int($bezug * 0.5);;\
+-    }\
+-    $target_power = 0 if($target_power < 0);;\
+-    $target_power = $max1 if($target_power > $max1);;\
+-    if($mppt_frei && $lade_bedarf)\
+-    {\
+-      $target_power += ReadingsNum("EMS_Control",\
+-          "mppBoostW",300);;\
+-      $target_power = $max1 if($target_power > $max1);;\
+-    }\
+-    my $last_target = ReadingsNum($DEV,\
+-        "last_target_power",0);;\
+-    if($clip_power == 0)\
+-    {\
+-      my $ramp_up_step;;\
+-      if($last_target < 200)\
+-      {\
+-        $ramp_up_step = 50;;\
+-      }\
+-      elsif($last_target < 1000)\
+-      {\
+-        $ramp_up_step = 150;;\
+-      }\
+-      else\
+-      {\
+-        $ramp_up_step = 400;;\
+-      }\
+-      my $last_ramp_t = ReadingsNum($DEV,"last_ramp_t",0);;\
+-      my $sofort_t = ReadingsNum($DEV,"bezug_sofort_t",0);;\
+-      $ramp_up_step = 0 if(($now - $last_ramp_t) <\
+-          $SEND_MIN_INTERVAL_C);;\
+-      $ramp_up_step = 0 if(($now - $sofort_t) <\
+-          $BEZUG_HOLD_S);;\
+-      $target_power = $last_target + $ramp_up_step\
+-          if($target_power > $last_target +\
+-          $ramp_up_step);;\
+-      $target_power = $last_target - 200\
+-          if($target_power < $last_target - 200);;\
+-      fhem("setreading $DEV last_ramp_t ".int($now))\
+-          if($target_power > $last_target);;\
+-    }\
+-    my $bezug_sofort = ($bezug > $BEZUG_SOFORT_W &&\
+-        $real_total > 50) ? 1 : 0;;\
+-    if($bezug_sofort)\
+-    {\
+-      my $t_sofort = int($real_total - $bezug -\
+-          $BEZUG_MARGE_W);;\
+-      $t_sofort = 0 if($t_sofort < 0);;\
+-      $target_power = $t_sofort\
+-          if($target_power > $t_sofort);;\
+-    }\
+-    $target_power = int($target_power);;\
+-    $target_power = 0 if($target_power < 0);;\
+-    fhem("setreading $DEV last_target_power $target_power");;\
+-    $p_charge = $target_power;;\
+-    $corr_total = $p_charge;;\
+-    if($p_charge > 50 && ($now - $last_pi_c) >=\
+-        $pi_interval)\
+-    {\
+-      my $err_c = $p_charge - $real_total;;\
+-      my $err_ratio = abs($err_c) / $p_charge;;\
+-      if($err_ratio > $totband_c)\
+-      {\
+-        $i_term_c += $err_c * $Ki_c;;\
+-        $i_term_c = $i_max_c if($i_term_c > $i_max_c);;\
+-        $i_term_c = -$i_max_c if($i_term_c <\
+-            -$i_max_c);;\
+-        $corr_total = int($p_charge + $Kp_c * $err_c +\
+-            $i_term_c);;\
+-        $corr_total = $max1 if($corr_total > $max1);;\
+-        $corr_total = 0 if($corr_total < 0);;\
+-      }\
+-      fhem("setreading $DEV pi_i_term_c ".int($i_term_c));;\
+-      fhem("setreading $DEV last_pi_c ".int($now));;\
+-    }\
+-    else\
+-    {\
+-      $corr_total = int($p_charge + $i_term_c);;\
+-      $corr_total = $max1 if($corr_total > $max1);;\
+-      $corr_total = 0 if($corr_total < 0);;\
+-    }\
+-    if($p_charge <= 50)\
+-    {\
+-      $i_term_c = 0;;\
+-      fhem("setreading $DEV pi_i_term_c 0");;\
+-    }\
+-    if($bezug_sofort)\
+-    {\
+-      $corr_total = $p_charge;;\
+-      if($i_term_c > 0)\
+-      {\
+-        $i_term_c = 0;;\
+-        fhem("setreading $DEV pi_i_term_c 0");;\
+-      }\
+-    }\
+-    $corr_total = int($corr_total);;\
+-    my $last_mode_intern_charge = ReadingsNum($DEV,\
+-        "last_mode_intern_charge",1);;\
+-    if($last_mode_intern_charge != 2 && $corr_total >\
+-        $SOFT_START_W)\
+-    {\
+-      $corr_total = $SOFT_START_W;;\
+-    }\
+-    $p1 = $allow_charge_bat1 ? int($corr_total) : 0;;\
+-    $p1 = $max1 if($p1 > $max1);;\
+-    my $last_send_c = ReadingsNum($DEV,"last_send_c",\
+-        0);;\
+-    my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-    my $sofort_send = ($bezug_sofort && $last_p1 >= 0 &&\
+-        $p1 < $last_p1 - 10) ? 1 : 0;;\
+-    if((($now - $last_send_c >= $SEND_MIN_INTERVAL_C) &&\
+-        abs($p1 - $last_p1) > $SEND_WATT_SCHWELLE_C) ||\
+-        $sofort_send)\
+-    {\
+-      fhem("set $WR EMSPowerWatt ".int($p1));;\
+-      fhem("setreading $DEV last_send_c ".int($now));;\
+-      fhem("setreading $DEV last_p1 ".int($p1));;\
+-      if($sofort_send)\
+-      {\
+-        fhem("setreading $DEV bezug_sofort_t ".int($now));;\
+-        fhem("setreading $DEV bezug_sofort_hr ".\
+-            FmtDateTime($now)." ".int($bezug)."W->".\
+-            int($p1));;\
+-      }\
+-    }\
+-    fhem("setreading $DEV last_mode_intern_charge $powermode");;\
+-  }\
+-  elsif($aktiver_modus eq "m1")\
+-  {\
+-    if($ev_laedt)\
+-    {\
+-      $powermode = 2;;\
+-      my $ev_res = ReadingsNum("EMS_Control","evReserveW",\
+-          700);;\
+-      my $last_send_c = ReadingsNum($DEV,"last_send_c",\
+-          0);;\
+-      my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-      my $sofort_t = ReadingsNum($DEV,"bezug_sofort_t",0);;\
+-      $p1 = $allow_charge_bat1 ?\
+-          int($real_total + $surplus - $ev_res) : 0;;\
+-      $p1 = 0 if($p1 < 0);;\
+-      $p1 = $max1 if($p1 > $max1);;\
+-      if($last_p1 >= 0 && $p1 > $last_p1)\
+-      {\
+-        $p1 = $last_p1 + 300 if($p1 > $last_p1 + 300);;\
+-        $p1 = $last_p1\
+-            if(($now - $sofort_t) < $BEZUG_HOLD_S);;\
+-      }\
+-      my $sofort_send = ($bezug > $BEZUG_SOFORT_W &&\
+-          $last_p1 >= 0 && $p1 < $last_p1 - 10) ? 1 : 0;;\
+-      if((($now - $last_send_c >= $SEND_MIN_INTERVAL_C)\
+-          && abs($p1 - $last_p1) >\
+-          $SEND_WATT_SCHWELLE_C) || $sofort_send)\
+-      {\
+-        fhem("set $WR EMSPowerWatt ".int($p1));;\
+-        fhem("setreading $DEV last_send_c ".int($now));;\
+-        fhem("setreading $DEV last_p1 ".int($p1));;\
+-        if($sofort_send)\
+-        {\
+-          fhem("setreading $DEV bezug_sofort_t ".int($now));;\
+-          fhem("setreading $DEV bezug_sofort_hr ".\
+-              FmtDateTime($now)." ev ".int($bezug)."W->".\
+-              int($p1));;\
+-        }\
+-      }\
+-    }\
+-    else\
+-    {\
+-      $powermode = 1;;\
+-      my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-      if($last_p1 != 0)\
+-      {\
+-        fhem("set $WR EMSPowerWatt 0");;\
+-        fhem("setreading $DEV last_p1 0");;\
+-        fhem("setreading $DEV last_pd1 0");;\
+-      }\
+-    }\
+-    fhem("setreading $DEV last_mode_intern_charge 1");;\
+-  }\
+-  elsif($aktiver_modus eq "halten")\
+-  {\
+-    $powermode = 1;;\
+-    my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-    if($last_p1 != 0)\
+-    {\
+-      fhem("set $WR EMSPowerWatt 0");;\
+-      fhem("setreading $DEV last_p1 0");;\
+-      fhem("setreading $DEV last_pd1 0");;\
+-    }\
+-    fhem("setreading $DEV master_xset 0");;\
+-    fhem("setreading $DEV last_mode_intern_charge 1");;\
+-  }\
+-  elsif($aktiver_modus eq "morgen" || $aktiver_modus eq\
+-      "abend" || $aktiver_modus eq "uebergang" ||\
+-      $aktiver_modus eq "nacht")\
+-  {\
+-    fhem("setreading $DEV last_mode_intern_charge 1");;\
+-    if(!$soc_ok_nacht)\
+-    {\
+-      $powermode = 1;;\
+-      $p1 = 0;;\
+-      my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-      if($last_p1 != 0)\
+-      {\
+-        fhem("set $WR EMSPowerWatt 0");;\
+-        fhem("setreading $DEV last_p1 0");;\
+-        fhem("setreading $DEV last_pd1 0");;\
+-      }\
+-      fhem("setreading $DEV master_xset 0");;\
+-    }\
+-    else\
+-    {\
+-      my $verfuegbar_wh = int(($soc1 - $socMin1)/100 *\
+-          $cap1 * 1000);;\
+-      $verfuegbar_wh = 0 if($verfuegbar_wh < 0);;\
+-      my $nacht_rest_kwh = ReadingsNum(\
+-          "DOIF_PV_forecast_Batterie_laden",\
+-          "nacht_rest_forecast_kwh",0);;\
+-      my $nacht_rest_wh = int($nacht_rest_kwh * 1000);;\
+-      $nacht_rest_wh = $nacht_bedarf_wh\
+-          if($nacht_rest_wh <= 0);;\
+-      $nacht_rest_wh = $nacht_bedarf_wh\
+-          if($nacht_rest_wh > $nacht_bedarf_wh);;\
+-      fhem("setreading $DEV nacht_rest_wh ".\
+-          int($nacht_rest_wh));;\
+-      my $nacht_noetig_wh = int($nacht_rest_wh *\
+-          $RESERVE_FAKTOR);;\
+-      my $deckung = ($nacht_noetig_wh > 0) ?\
+-          ($verfuegbar_wh / $nacht_noetig_wh) : 2.0;;\
+-      my $EINSPEIS_MAX = ReadingsNum("EMS_Control",\
+-          "nachtEinspeisMaxW",100);;\
+-      my $BEZUG_MAX = ReadingsNum("EMS_Control",\
+-          "nachtBezugMaxW",100);;\
+-      my $DECK_HOCH = ReadingsNum("EMS_Control",\
+-          "nachtDeckungHoch",1.5);;\
+-      my $DECK_NIEDRIG = ReadingsNum("EMS_Control",\
+-          "nachtDeckungNiedrig",1.0);;\
+-      my $grid_ziel;;\
+-      if($deckung >= $DECK_HOCH)\
+-      {\
+-        $grid_ziel = -$EINSPEIS_MAX;;\
+-      }\
+-      elsif($deckung <= $DECK_NIEDRIG)\
+-      {\
+-        $grid_ziel = $BEZUG_MAX;;\
+-      }\
+-      else\
+-      {\
+-        my $frac = ($deckung - $DECK_NIEDRIG) /\
+-            ($DECK_HOCH - $DECK_NIEDRIG);;\
+-        $grid_ziel = int($BEZUG_MAX - $frac *\
+-            ($BEZUG_MAX + $EINSPEIS_MAX));;\
+-      }\
+-      fhem("setreading $DEV nacht_deckung ".sprintf("%.2f",\
+-          $deckung));;\
+-      fhem("setreading $DEV nacht_grid_ziel ".int($grid_ziel));;\
+-      my $master_xset = ReadingsNum($DEV,"master_xset",\
+-          0);;\
+-      my $last_trim_t = ReadingsNum($DEV,"last_trim_t",\
+-          0);;\
+-      my $err_d = $grid - $grid_ziel;;\
+-      if(($now - $last_trim_t) >= $TRIM_INTERVAL_S &&\
+-          abs($err_d) > $TRIM_TOTBAND_W)\
+-      {\
+-        my $step = int($err_d * $Ki_dis);;\
+-        $step = $TRIM_STEP_MAX if($step >\
+-            $TRIM_STEP_MAX);;\
+-        $step = -$TRIM_STEP_MAX if($step <\
+-            -$TRIM_STEP_MAX);;\
+-        $master_xset += $step;;\
+-        $master_xset = 0 if($master_xset < 0);;\
+-        $master_xset = $max_discharge1 if($master_xset\
+-            > $max_discharge1);;\
+-        fhem("setreading $DEV last_trim_t ".int($now));;\
+-        fhem("setreading $DEV trim_step ".int($step));;\
+-      }\
+-      fhem("setreading $DEV master_xset ".int($master_xset));;\
+-      $powermode = 10;;\
+-      $p1 = int($master_xset);;\
+-      my $last_send_d = ReadingsNum($DEV,"last_send_d",\
+-          0);;\
+-      my $last_pd1 = ReadingsNum($DEV,"last_pd1",-1);;\
+-      if($p1 != $last_pd1 && ($now - $last_send_d) >=\
+-          $SEND_MIN_INTERVAL_D)\
+-      {\
+-        fhem("set $WR EMSPowerWatt ".int($p1));;\
+-        fhem("setreading $DEV last_send_d ".int($now));;\
+-        fhem("setreading $DEV last_pd1 ".int($p1));;\
+-      }\
+-      fhem("setreading $DEV trim_err ".int($err_d));;\
+-    }\
+-  }\
+-  if(!$pv_latch && !$ev_laedt && ($aktiver_modus eq\
+-      "laden" || $aktiver_modus eq "m1"))\
+-  {\
+-    $powermode = 1;;\
+-    my $last_p1 = ReadingsNum($DEV,"last_p1",-1);;\
+-    if($last_p1 != 0)\
+-    {\
+-      fhem("set $WR EMSPowerWatt 0");;\
+-      fhem("setreading $DEV last_p1 0");;\
+-      fhem("setreading $DEV last_pd1 0");;\
+-    }\
+-  }\
+-  if($ev_laedt && $powermode == 1)\
+-  {\
+-    $powermode = 2;;\
+-  }\
+-  my $last_mode = ReadingsNum($DEV,"last_mode",-1);;\
+-  if($powermode != $last_mode)\
+-  {\
+-    if($powermode == 1 && $last_mode != 1)\
+-    {\
+-      fhem("set $WR EMSPowerWatt 0");;\
+-      fhem("setreading $DEV last_p1 0");;\
+-      fhem("setreading $DEV last_pd1 0");;\
+-    }\
+-    fhem("set $WR EMSPowerMode $powermode");;\
+-    fhem("setreading $DEV last_mode $powermode");;\
+-    if($powermode == 10 || $powermode == 12)\
+-    {\
+-      fhem("set $WR EMSPowerWatt ".int($p1));;\
+-      fhem("setreading $DEV last_pd1 ".int($p1));;\
+-      fhem("setreading $DEV last_send_d ".int($now));;\
+-    }\
+-    elsif($powermode == 2)\
+-    {\
+-      fhem("set $WR EMSPowerWatt ".int($p1));;\
+-      fhem("setreading $DEV last_p1 ".int($p1));;\
+-      fhem("setreading $DEV last_send_c ".int($now));;\
+-    }\
+-  }\
+-  fhem("setreading $DEV aktiver_modus $aktiver_modus");;\
+-  fhem("setreading $DEV p_charge ".int($p_charge));;\
+-  fhem("setreading $DEV p1 ".int($p1));;\
+-  fhem("setreading $DEV grid ".int($grid));;\
+-  fhem("setreading $DEV einspeis ".int($einspeis));;\
+-  fhem("setreading $DEV bezug ".int($bezug));;\
+-  fhem("setreading $DEV surplus ".int($surplus));;\
+-  fhem("setreading $DEV grundlast_5min ".int($grundlast_5min));;\
+-  fhem("setreading $DEV grundlast_60s_ohne_ev ".int($grundlast_60s_ohne_ev));;\
+-  fhem("setreading $DEV wp_laeuft ".int($wp_laeuft));;\
+-  fhem("setreading $DEV wp_war_an ".int($wp_laeuft));;\
+-  fhem("setreading $DEV pv_active ".int($pv_active));;\
+-  fhem("setreading $DEV pv_ueber_verbrauch_latch ".int($pv_latch));;\
+-  fhem("setreading $DEV mode1 ".int($mode1));;\
+-  fhem("setreading $DEV bat1_power ".int($bat1));;\
+-  fhem("setreading $DEV allow_charge ".int($allow_charge));;\
+-  fhem("setreading $DEV halten_aktiv ".int($halten_aktiv));;\
+-  fhem("setreading $DEV genug_pv_tag ".int($genug_pv_tag));;\
+-  fhem("setreading $DEV pv_power ".int($pv_power));;\
+-  fhem("setreading $DEV powermode $powermode");;\
+-  fhem("setreading $DEV SOC1 $soc1");;\
+-  my $anomalien = "";;\
+-  if(($aktiver_modus eq "nacht" || $aktiver_modus eq\
+-      "uebergang") && $bezug > 500)\
+-  {\
+-    $anomalien .= "BEZUG_NACHT_${bezug}W ";;\
+-  }\
+-  if($anomalien ne "")\
+-  {\
+-    fhem("setreading $DEV anomalien $anomalien");;\
+-    Log 2, "[GoodWe-Anomalie-A2] $anomalien";;\
+-  }\
+-  my @ts_readings = qw(last_forecast_eval_epoch\
+-      last_socmax_epoch pv_latch_reset_epoch\
+-      ziel_stabil_seit last_trim_t last_send_c\
+-      last_send_d last_pi_c gl_last_t);;\
+-  foreach my $tr (@ts_readings)\
+-  {\
+-    my $te = ReadingsNum($DEV,$tr,0);;\
+-    if($te > 0)\
+-    {\
+-      fhem("setreading $DEV ${tr}_hms ".POSIX::strftime("%d.%m. %H:%M:%S",\
+-          localtime($te)));;\
+-    }\
+-  }\
+-}\
+-\
+-
+-setuuid DOIF_GoodWe_simple 69fb213a-f33f-5756-0432-38c8a460f33df365
+-attr DOIF_GoodWe_simple do always
+-attr DOIF_GoodWe_simple event-min-interval nacht_grid_ziel:30,master_xset:30,nacht_deckung:30,grid:30,trim_err:30,powermode:0,aktiver_modus:0,SOC1:30,.*:900
+-attr DOIF_GoodWe_simple event-on-change-reading .*,dusk_unter_seit,wp_nacht_energie_last_t
+-attr DOIF_GoodWe_simple room 01 PV
+-attr DOIF_GoodWe_simple userReadings dusk_unter_seit_hr:dusk_unter_seit.* {my $t=ReadingsNum("DOIF_GoodWe_simple","dusk_unter_seit",0);; $t>0?FmtDateTime($t):"-"}, wp_nacht_energie_last_t_hr:wp_nacht_energie_last_t.* {my $t=ReadingsNum("DOIF_GoodWe_simple","wp_nacht_energie_last_t",0);; $t>0?FmtDateTime($t):"-"}
+ define myShelly_Garage_Deye Shelly 192.168.178.132
+ setuuid myShelly_Garage_Deye 6a045635-f33f-5756-a0d2-b49596f26c7efad9
+ attr myShelly_Garage_Deye ShellyName Technikraum_Deye_PM_L1
+@@ -17599,10 +16663,8 @@ if($ist_nacht)\
+ {\
+     if($avg_valid)\
+     {\
+-        fhem("setreading DOIF_GoodWe_simple grundlast_profil_h $avg");;\
+         fhem("setreading $DEV grundlast_profil_h $avg");;\
+     }\
+-    fhem("setreading DOIF_GoodWe_simple grundlast_profil_stunde $hour");;\
+ }\
+ my @nacht_stunden = (20,21,22,23,0,1,2,3,4,5,6,7);;\
+ my $nacht_wh = 0;;\
+@@ -19303,10 +18365,6 @@ define SVG_Bezugsenergie_Tagesverlauf SVG Bezugsenergie_Tagesverlauf:SVG_Bezugse
+ setuuid SVG_Bezugsenergie_Tagesverlauf 6a795fed-f33f-5756-f1d5-811caa41e5a33e48
+ attr SVG_Bezugsenergie_Tagesverlauf plotsize 1200,600
+ attr SVG_Bezugsenergie_Tagesverlauf room 01 PV,LogFiles,zEnergiezaehlerrohdaten
+-define FileLog_GoodWe_Regelung FileLog /opt/fhem/log/GoodWe_Regelung_%Y-%m.log DOIF_GoodWe_simple:(nacht_grid_ziel|master_xset|nacht_deckung|grid|einspeis|bezug|trim_err|trim_step|powermode|aktiver_modus|SOC1|grundlast_60s_ohne_ev|pv_power):.*|GoodWe:(SOC|Power_Battery):.*
+-setuuid FileLog_GoodWe_Regelung 6a7ab5e9-f33f-5756-f0da-01f8d4ee89a6d07e
+-attr FileLog_GoodWe_Regelung logtype text
+-attr FileLog_GoodWe_Regelung room LogFiles,01 PV
+ define Ertragsuebersicht readingsGroup HA_SDM630M_Haus:<Ertrag_heute_Gesamt>,Einnahmen_gesamt\
+ HA_SDM630M_Haus:<Ertrag_heute_Haus>,Kosten_Haus\
+ HA_SDM630M_Haus:<Ertrag_heute_WP>,Kosten_WP\
+@@ -19428,7 +18486,7 @@ define SVG_FileLog_Elektrische_Gesamtleistungen_Haus_PV_WP SVG FileLog_Elektrisc
+ setuuid SVG_FileLog_Elektrische_Gesamtleistungen_Haus_PV_WP 6a9e7633-f33f-5756-0de5-40bc81d95d693fc6
+ attr SVG_FileLog_Elektrische_Gesamtleistungen_Haus_PV_WP plotsize 1500,600
+ attr SVG_FileLog_Elektrische_Gesamtleistungen_Haus_PV_WP room 0Solar,0_Energie,LogFiles,zEnergiezaehlerrohdaten
+-define di_IstKurve_Log DOIF ([+00:05:00]) { my $dev = "DOIF_GoodWe_simple";; my ($min,$h,$mday) = (localtime)[1,2,3];; my $b1 = ReadingsNum("GoodWe","Power_Battery",0);; my $kw = 0;; $kw += -$b1 if($b1 < 0);; $kw /= 1000;; my $lastday = ReadingsNum($dev,"ist_kw_day",-1);; if($lastday != $mday) { for my $i (0..23) { fhem("setreading $dev ".sprintf("ist_kw_%02d",$i)." -1");; fhem("setreading $dev ".sprintf("ist_kw_%02d_n",$i)." 0");; } fhem("setreading $dev ist_kw_day $mday");; } my $key = sprintf("ist_kw_%02d",$h);; my $alt = ReadingsNum($dev,$key,-1);; my $n = ReadingsNum($dev,$key."_n",0);; my $avg = ($n > 0 && $alt >= 0) ? (($alt*$n + $kw)/($n+1)) : $kw;; fhem("setreading $dev $key ".sprintf("%.3f",$avg));; fhem("setreading $dev ${key}_n ".($n+1));;\
++define di_IstKurve_Log DOIF ([+00:05:00]) { my $dev = "di_IstKurve_Log";; my ($min,$h,$mday) = (localtime)[1,2,3];; my $b1 = ReadingsNum("GoodWe","Power_Battery",0);; my $kw = 0;; $kw += -$b1 if($b1 < 0);; $kw /= 1000;; my $lastday = ReadingsNum($dev,"ist_kw_day",-1);; if($lastday != $mday) { for my $i (0..23) { fhem("setreading $dev ".sprintf("ist_kw_%02d",$i)." -1");; fhem("setreading $dev ".sprintf("ist_kw_%02d_n",$i)." 0");; } fhem("setreading $dev ist_kw_day $mday");; } my $key = sprintf("ist_kw_%02d",$h);; my $alt = ReadingsNum($dev,$key,-1);; my $n = ReadingsNum($dev,$key."_n",0);; my $avg = ($n > 0 && $alt >= 0) ? (($alt*$n + $kw)/($n+1)) : $kw;; fhem("setreading $dev $key ".sprintf("%.3f",$avg));; fhem("setreading $dev ${key}_n ".($n+1));;\
+ my $pk = sprintf("plan_fix_%02d",$h);;\
+ if(ReadingsNum($dev,"plan_fix_day",-1) != $mday)\
+ {\
