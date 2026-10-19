@@ -31,3 +31,8 @@
 - v2 sendet nur bei `EMS_Control:v2Aktiv = 1`, sonst beobachtet es nur.
 - Das Ladeziel (`socmax_eff`) wird ausschließlich in v2 berechnet (`socMax1`, `smax_prog`, `vollladen_rest`).
   Das PVBudget-Modul liest es nur.
+
+## EMS-Parameter-Oberfläche
+- `EMSPanel/99_EMSPanel.pm` erzeugt die Schieberegler-Seite für `EMS_Control` (weblink `wl_EMS_Parameter`, Raum `EMS-Parameter`).
+- Der Parameterkatalog (Name, Tab, Beschriftung, Bereich, Standard je S9/A9) steht nur dort. Neuer oder gestrichener
+  `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen. Standardwerte müssen zum Code passen.
