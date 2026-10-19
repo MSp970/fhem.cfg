@@ -22,7 +22,7 @@ bypassBat5876|Batterie|Bypass Batterie 2 (5876)|Nimmt die Batterie aus der Regel
 iMaxA|Laden|Max. Ladestrom|Obergrenze des Ladestroms (v2 begrenzt intern auf 10 A).|A|1|10|0.5|10|10|*|k
 iSchrittA|Laden|Ladestrom: Stufung|Ladestrom (Batterie_Ladestrom_Max) wird auf ganze Vielfache dieses Werts abgerundet und nur bei einer Änderung um mindestens eine Stufe geschrieben. 0 = keine Stufung (altes Verhalten).|A|0|5|0.5|1|1|*
 iMinAbstandS|Laden|Ladestrom: Mindestabstand|Mindestzeit zwischen zwei Schreibzugriffen auf den Ladestrom. 0 = altes Verhalten. Abschalten und Schnell-Reduzierung sind separat einstellbar.|s|0|3600|30|300|300|*
-iNurMode1|Laden|Ladestrom nur in Mode 1 schreiben|An: Der Ladestrom geht nur im Wechselrichter-Mode 1 an den Wechselrichter (sonst steuert EMSPowerWatt die Leistung). Aus = altes Verhalten (alle Modi). Bei m11Aktiv=1 auf aus stellen.||0|1|1|1|1|*|b
+iNurMode1|Laden|Ladestrom nur in Mode 1 schreiben|An: Der Ladestrom wird nur in Mode 1 gestuft geschrieben. In allen anderen Modi (außer 255) steht er auf iMaxA (10 A) und wird nur beim Moduswechsel einmal gesetzt; die Leistung steuert dort EMSPowerWatt. Aus = altes Verhalten (alle Modi, unverändert).||0|1|1|1|1|*|b
 iStopSofort|Laden|Abschalten (0 A) sofort|An: Das Abschalten des Ladestroms ignoriert den Mindestabstand.||0|1|1|1|1|*|b
 iSchnellSofort|Laden|Schnell-Reduzierung sofort|An: Die Reduzierung bei Netzbezug ignoriert den Mindestabstand.||0|1|1|1|1|*|b
 iMaxFcA|Laden|Ladestrom bei guter Prognose|Reduzierter Ladestrom, wenn die Prognose den Ladebedarf deutlich übersteigt.|A|1|10|0.5|7|7|*

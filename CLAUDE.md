@@ -40,7 +40,7 @@
 
 ## Ladestrom schreiben
 - `Batterie_Ladestrom_Max` landet im Flash des Wechselrichters (`di_GoodWe_Flash` zählt es) und darf nur selten geschrieben werden.
-  v2 schreibt ihn nur in Mode 1 (`iNurMode1`), in ganzen Ampere abgerundet (`iSchrittA`, Standard 1) und frühestens alle
-  `iMinAbstandS` s (Standard 300). Abschalten (`iStopSofort`) und Schnell-Reduzierung bei Netzbezug (`iSchnellSofort`) bleiben
-  sofort. Alter Zustand: `iNurMode1=0`, `iSchrittA=0`, `iMinAbstandS=0`. Die Leistung geht über `EMSPowerWatt`.
-  Bei `m11Aktiv=1` (Mode 11 braucht einen Strom-Deckel) `iNurMode1` auf 0 stellen. Nicht wieder auf 0,05-A-Schritte zurückbauen.
+  Mode 1: in ganzen Ampere abgerundet (`iSchrittA`, Standard 1), frühestens alle `iMinAbstandS` s (Standard 300).
+  Alle anderen Modi (außer 255): Strom = `iMaxA` (10 A), einmalig beim Moduswechsel gesetzt (`i_mode`), nie 0 A; die Leistung geht über `EMSPowerWatt`.
+  Eintritt in Mode 1 setzt den gestuften Wert sofort. Abschalten/Moduswechsel (`iStopSofort`) und Schnell-Reduzierung bei Netzbezug
+  (`iSchnellSofort`) bleiben sofort. Alter Zustand: `iNurMode1=0`, `iSchrittA=0`, `iMinAbstandS=0`. Nicht wieder auf 0,05-A-Schritte zurückbauen.
