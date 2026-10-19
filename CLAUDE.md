@@ -21,8 +21,11 @@
 ## Batterie-Regelung
 - `DOIF_GoodWe_v2` ist der einzige Regler für den GoodWe-Wechselrichter (S9 und A9). `DOIF_GoodWe_simple` und
   `DOIF_Batterie_Ladestrom_Max` sind in beiden Konfigurationen entfernt und dürfen nicht wieder eingeführt werden.
-- A9 hat zwei Batterien (5877/5876). Dort laufen zusätzlich `di_GoodWe_NachtFahrplan` (19–8 Uhr) und
-  `DOIF_socMax_adaptiv` (12:00, schreibt `socMax1/2`) neben v2. Das ist ein offener Konflikt, solange nicht entschieden ist, ob sie entfallen.
+- A9 hat zwei Batterien (5877/5876). `di_GoodWe_NachtFahrplan` und `DOIF_socMax_adaptiv` sind dort entfernt:
+  Nachtregelung und jahreszeitliche socMax-Anpassung (12:00, 80-98 %, PV-7-Tage-Mittel + Außentemperatur, Readings `ad_*`)
+  liegen in `DOIF_GoodWe_v2`. Keine zweiten Regler neben v2 einführen.
+- Das Repo (A9/fhem.cfg) kann vom Live-Stand abweichen. Änderungen für die laufende Anlage deshalb als tolerante
+  Einzeiler liefern, die Rest-Verweise anzeigen, und nie blind löschen.
 - v2 sendet nur bei `EMS_Control:v2Aktiv = 1`, sonst beobachtet es nur.
 - Das Ladeziel (`socmax_eff`) wird ausschließlich in v2 berechnet (`socMax1`, `smax_prog`, `vollladen_rest`).
   Das PVBudget-Modul liest es nur.
