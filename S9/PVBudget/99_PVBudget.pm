@@ -28,6 +28,7 @@ my %PVB_DEF = (
   wp_unsich => 0.30,                    # rel. Unsicherheit WP-Bedarf (P10-Szenario: x(1+z*wert))
   pv_gut_kwh => 20,                     # PV-Tagesertrag ab dem Folgetag als "gut" gilt
   sigma_def => 0.30,                    # rel. PV-Prognoseunsicherheit ohne Historie
+  soc_ziel => 0,                        # Ladeziel in % (0 = auto: v2-Vollladen -> 100, sonst EMS_Control:socMax1)
   hf_aktiv => 1,                        # Stundenfaktoren (Verschattung) anwenden
   tbase_def => 15,                      # Heizgrenze, sonst Heiz_Optimierung_KI:temp_basis
 );
@@ -293,7 +294,15 @@ sub PVB_budget($) {
 
   # Akku
   my $soc=ReadingsNum("GoodWe","SOC",0);
-  my $smin=ReadingsNum("EMS_Control","socMin1",20); my $smax=ReadingsNum("EMS_Control","socMax1",80);
+  my $smin=ReadingsNum("EMS_Control","socMin1",20);
+  my $ems_max=ReadingsNum("EMS_Control","socMax1",80);
+  my $vl=ReadingsNum("DOIF_GoodWe_v2","vollladen_rest",0)>0 ? 1 : 0;
+  my $zp=PVB_P("soc_ziel",0); my ($smax,$zq);
+  if($zp>0)    { $smax=PVB_clip($zp,$smin+1,100); $zq="vorgabe p_soc_ziel"; }
+  elsif($vl)   { $smax=100;      $zq="v2 vollladen_rest"; }
+  else         { $smax=$ems_max; $zq="EMS_Control socMax1"; }
+  my $zhint = ($ems_max < $smax && !$vl)
+    ? "ACHTUNG: EMS_Control socMax1=$ems_max begrenzt das Laden, Ziel $smax% wird so nicht erreicht" : "ok";
   my $cap=ReadingsNum("EMS_Control","capacity1",16.2);
   my $eb=($soc-$smin)/100*$cap; $eb=0 if($eb<0);
   my $cn=($smax-$smin)/100*$cap; $cn=0 if($cn<0);
@@ -318,9 +327,15 @@ sub PVB_budget($) {
     return PVB_clip($w,0,$wmax); };
   my $wpw=($ampel eq "gruen")?$pw->($bud{p10}):0;
   my $wpw50=$pw->($bud{p50});
+  my $wpw10=$pw->($bud{p10});
+  my $wp_ist=ReadingsNum("HA_SDM630M_Heatpump","Power_Sum__W1",0); $wp_ist=0 if($wp_ist<0);
+  my $wpstat = ($wp_ist<50)            ? "aus"
+             : ($wp_ist<=$wpw10)       ? "innerhalb_P10"
+             : ($wp_ist<=$wpw50)       ? "ueber_P10_unter_P50"
+             :                           "ueber_P50";
 
-  my $grund=sprintf("%s [%s]: Budget P10 %+.1f / P50 %+.1f kWh | Akku %.1f + PV-Rest %.1f*%.2f | Bedarf %.1f (Defizit bis PV-Uebernahme %.1f davon WP %.1f, Reserve %.1f) | k_live %.2f, sigma %.2f (n=%d), Last-Korr %.2f | Horizont %.1f h -> WP-Budget %d W",
-    $ampel,$night?"Nacht":"Tag",$bud{p10},$bud{p50},$eb,$U{p10},$eta,$need{p10},$Dz{p10},$Wz{p10},$res,$kl,$sd,$sn,$klast,$hor,$wpw);
+  my $grund=sprintf("%s [%s]: Budget P10 %+.1f / P50 %+.1f kWh | Akku %.1f + PV-Rest %.1f*%.2f | Bedarf %.1f (Defizit bis PV-Uebernahme %.1f davon WP %.1f, Reserve %.1f) | k_live %.2f, sigma %.2f (n=%d), Last-Korr %.2f | Ziel-SOC %d%% (%s) | Horizont %.1f h -> WP-Budget %d W | WP jetzt %d W: P10 %d / P50 %d W = %s",
+    $ampel,$night?"Nacht":"Tag",$bud{p10},$bud{p50},$eb,$U{p10},$eta,$need{p10},$Dz{p10},$Wz{p10},$res,$kl,$sd,$sn,$klast,$smax,$zq,$hor,$wpw,$wp_ist,$wpw10,$wpw50,$wpstat);
 
   my $h=$defs{$PVB}; my $ampel_alt=PVB_V("ampel","");
   readingsBeginUpdate($h);
@@ -335,7 +350,8 @@ sub PVB_budget($) {
     bedarf_p10=>sprintf("%.2f",$need{p10}), bedarf_p50=>sprintf("%.2f",$need{p50}),
     budget_tag_p10=>sprintf("%.2f",$tag{p10}), budget_jetzt_p10=>sprintf("%.2f",$jetzt{p10}),
     budget_p10=>sprintf("%.2f",$bud{p10}), budget_p50=>sprintf("%.2f",$bud{p50}),
-    wp_budget_w_p50=>$wpw50, state=>$ampel );
+    wp_budget_w_p10=>$wpw10, wp_budget_w_p50=>$wpw50, wp_ist_w=>int($wp_ist), wp_status=>$wpstat,
+    soc_ziel=>$smax, soc_ziel_quelle=>$zq, soc_ziel_hinweis=>$zhint, state=>$ampel );
   readingsBulkUpdate($h,$_,$o{$_},0) for keys %o;
   readingsBulkUpdate($h,"ampel",$ampel,1);
   readingsBulkUpdate($h,"wp_budget_w",$wpw,1);
@@ -353,7 +369,7 @@ sub PVB_budget($) {
     sprintf("%.2f",$eb),sprintf("%.2f",$U{p10}),sprintf("%.2f",$U{p50}),sprintf("%.2f",$Dz{p10}),
     sprintf("%.2f",$Dz{p50}),sprintf("%.2f",$Wz{p10}),sprintf("%.2f",$fc_rest*$kl),sprintf("%.3f",$kl),
     sprintf("%.3f",$sd),sprintf("%.1f",$wpD),sprintf("%.1f",$pvD),sprintf("%.1f",$tm),$night?"nacht":"tag",
-    $grund ] };
+    $grund ], wp_ist=>int($wp_ist), wp10=>$wpw10, wp50=>$wpw50, wpstat=>$wpstat, ziel=>$smax };
 }
 
 # ---- Haupteinstieg, jede Minute
@@ -401,12 +417,13 @@ sub PVB_tick() {
   my $min=$lt[1];
   if($min%5==0 || $r->{ampel} ne $r->{alt}) {
     PVB_log(sprintf("%s/PV_Budget-%s.csv",$LOGDIR,strftime("%Y-%m",@lt)),
-      "zeit;budget_p10;budget_p50;budget_jetzt_p10;wp_budget_w;soc;akku_verf_kwh;uebersch_p10;uebersch_p50;def_p10;def_p50;wp_fenster_p10;pv_rest_p50;k_live;sigma;wp_bezugstag;pv_bezugstag;tmean;modus;grund;ampel;pv_w;haus_w;wp_w;einspeis_w;ki_quelle;ki_heiz_voraus;ki_freigabe;verdichter",
+      "zeit;budget_p10;budget_p50;budget_jetzt_p10;wp_budget_w;soc;akku_verf_kwh;uebersch_p10;uebersch_p50;def_p10;def_p50;wp_fenster_p10;pv_rest_p50;k_live;sigma;wp_bezugstag;pv_bezugstag;tmean;modus;grund;ampel;pv_w;haus_w;wp_w;einspeis_w;ki_quelle;ki_heiz_voraus;ki_freigabe;verdichter;wp_ist_w;wp_p10_w;wp_p50_w;wp_status;soc_ziel",
       strftime("%Y-%m-%d %H:%M:%S",@lt),@{$r->{row}}[0..17],$r->{row}[18],$r->{ampel},
       int(ReadingsNum("HA_SDM630M_PV_Erzeugung","Gesamt_PV_Leistung_S9",0)),int($haus),int($wp),
       int(ReadingsNum("HA_SDM630M_Nergie","Einspeiseleistung",0)),
       ReadingsVal("Heiz_Optimierung_KI","quelle",""),ReadingsVal("Heiz_Optimierung_KI","heiz_voraus",""),
-      ReadingsVal("Heiz_Optimierung_KI","verdichter_freigabe",""),ReadingsVal("Mythz","Verdichter_sGlobal",""));
+      ReadingsVal("Heiz_Optimierung_KI","verdichter_freigabe",""),ReadingsVal("Mythz","Verdichter_sGlobal",""),
+      $r->{wp_ist},$r->{wp10},$r->{wp50},$r->{wpstat},$r->{ziel});
   }
   return undef;
 }
