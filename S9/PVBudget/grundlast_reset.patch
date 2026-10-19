@@ -1,0 +1,17 @@
+diff --git a/S9/fhem.cfg b/S9/fhem.cfg
+index e447b90..8fe6d65 100644
+--- a/S9/fhem.cfg
++++ b/S9/fhem.cfg
+@@ -17579,9 +17579,9 @@ $cnt    += 1;;\
+ $ev_sum += $ev_w;;\
+ if($cnt > 7 * 60)\
+ {\
+-    $sum    = $gl_bereinigt;;\
+-    $cnt    = 1;;\
+-    $ev_sum = $ev_w;;\
++    $sum    = $sum    * (7 * 60) / $cnt;;\
++    $ev_sum = $ev_sum * (7 * 60) / $cnt;;\
++    $cnt    = 7 * 60;;\
+ }\
+ fhem("setreading $DEV $hkey ".sprintf("%.0f",$sum));;\
+ fhem("setreading $DEV $nkey $cnt");;\
