@@ -6,9 +6,10 @@
   Code für die Kommandozeile deshalb immer mit `;;` ausgeben und vorher mit `sed 's/;/;;/g'`
   erzeugen und prüfen.
 - **Perl-Code in `fhem.cfg`:** Zeilenfortsetzung mit `\` am Zeilenende und `;;` für Semikolons.
-- **Größere Logik** als Modul `99_*.pm` (Perl, testbar) ablegen und in der cfg nur aufrufen.
-  Der Nutzer hat teils keine Schreibrechte auf `/opt/fhem/FHEM/`. Dann Alternativen anbieten:
-  `sudo cp` plus `chown`, FHEM-Web "Edit files", oder `{ require "/pfad/datei.pm" }`.
+- **Keine neuen `99_*.pm`-Module und keine Dateien in `/opt/fhem/FHEM/`.** Der Nutzer hat dort teils keine Schreibrechte,
+  und solche Dateien können nach einem Update (z. B. neues Container-Image) weg sein. Alles, was die Anlage braucht,
+  muss in `fhem.cfg`/Attributen liegen und per `save` gesichert werden: DOIF (auch mit `subs`-Block), Attribute, Einzeiler.
+  Bestehende Module (`S9/PVBudget/99_PVBudget.pm`) sind optional und rein beobachtend; die Regelung darf nicht davon abhängen.
 
 ## Umgang mit der Anlage
 - Es gibt keinen Live-Zugriff auf FHEM. Nur die Konfiguration im Repo ist bekannt. Aussagen zum
@@ -33,6 +34,11 @@
   Das PVBudget-Modul liest es nur.
 
 ## EMS-Parameter-Oberfläche
-- `EMSPanel/99_EMSPanel.pm` erzeugt die Schieberegler-Seite für `EMS_Control` (weblink `wl_EMS_Parameter`, Raum `EMS-Parameter`).
-- Der Parameterkatalog (Name, Tab, Beschriftung, Bereich, Standard je S9/A9) steht nur dort. Neuer oder gestrichener
-  `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen. Standardwerte müssen zum Code passen.
+- Schieberegler für `EMS_Control` laufen nativ über die Attribute `setList` (`name:slider,min,step,max`) und `readingList`.
+  Der Katalog dazu steht in `EMSPanel/ems_katalog.txt`, der Einzeiler in `EMSPanel/ems_slider_einzeiler.txt`. Neuer oder
+  gestrichener `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen und Einzeiler neu erzeugen.
+
+## Ladestrom schreiben
+- `Batterie_Ladestrom_Max` landet im Flash des Wechselrichters (`di_GoodWe_Flash` zählt es) und darf nur selten geschrieben werden.
+  v2 schreibt ihn nur bei Änderung >= `iSchrittA` (Standard 1 A) und frühestens nach `iMinAbstandS` (Standard 300 s);
+  Abschalten (0 A) und Schnell-Reduzierung bei Netzbezug bleiben sofort. Nicht wieder auf 0,05-A-Schritte zurückbauen.
