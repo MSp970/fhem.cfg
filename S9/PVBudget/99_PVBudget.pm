@@ -77,11 +77,18 @@ sub PVB_hfnorm($) {
 sub PVB_prof($$) {
   my ($dtp,$h)=@_; my $k=sprintf("gl_%s_%02d",$dtp,$h);
   my $m=ReadingsVal($PVB,$k."_m",undef);
-  if(!defined($m) || $m eq "") {
-    $m=ReadingsNum("DOIF_Grundlast_Profil",sprintf("grundlast_h%02d_ohne_ev",$h),300)
-       * PVB_P("seed_faktor",0.8);
-  }
   my $v=ReadingsVal($PVB,$k."_v",undef);
+  if(!defined($m) || $m eq "") {
+    # Startwert: gelernte andere Tagesart derselben Stunde, sonst altes Profil (enthaelt WP -> hoch)
+    my $ok=sprintf("gl_%s_%02d",($dtp eq "we"?"wt":"we"),$h);
+    my $om=ReadingsVal($PVB,$ok."_m",undef);
+    if(defined($om) && $om ne "") { $m=$om; }
+    else {
+      $m=ReadingsNum("DOIF_Grundlast_Profil",sprintf("grundlast_h%02d_ohne_ev",$h),300)
+         * PVB_P("seed_faktor",0.8);
+    }
+    $v=undef;
+  }
   $v=(0.3*$m)**2 if(!defined($v) || $v eq "");
   return ($m,$v);
 }
