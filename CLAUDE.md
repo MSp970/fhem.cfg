@@ -34,9 +34,11 @@
   Das PVBudget-Modul liest es nur.
 
 ## EMS-Parameter-Oberfläche
-- Schieberegler für `EMS_Control` laufen nativ über die Attribute `setList` (`name:slider,min,step,max`) und `readingList`.
-  Der Katalog dazu steht in `EMSPanel/ems_katalog.txt`, der Einzeiler in `EMSPanel/ems_slider_einzeiler.txt`. Neuer oder
-  gestrichener `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen und Einzeiler neu erzeugen.
+- Eine Seite mit je einem Schieberegler pro `EMS_Control`-Parameter, untereinander in Tabs: `weblink wl_EMS_Parameter` (Raum `EMS-Parameter`),
+  reine Konfiguration ohne Modul. Der Generator steht in `EMSPanel/ems_weblink_defmod.txt`, der Katalog (Name|System|Tab|min|Schritt|max|Einheit|
+  Standard S9|Standard A9|Bezeichnung|Flags) als Attribut `comment` des Weblinks, Vorlage in `EMSPanel/ems_weblink_katalog_attr.txt`.
+  Neuer oder gestrichener `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen (`EMSPanel/ems_katalog.txt` ist die Langfassung).
+- Alternative ohne eigene Seite: `EMSPanel/ems_slider_einzeiler.txt` setzt `setList`/`readingList` (Regler nur im Set-Feld).
 
 ## Ladestrom schreiben
 - `Batterie_Ladestrom_Max` landet im Flash des Wechselrichters (`di_GoodWe_Flash` zählt es) und darf nur selten geschrieben werden.
