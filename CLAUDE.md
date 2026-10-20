@@ -35,7 +35,8 @@
 
 ## EMS-Parameter-Oberfläche
 - Eine Seite mit je einem Schieberegler pro `EMS_Control`-Parameter, untereinander in Tabs: `weblink wl_EMS_Parameter` (Raum `EMS-Parameter`),
-  reine Konfiguration ohne Modul. Der Generator steht in `EMSPanel/ems_weblink_defmod.txt`, der Katalog (Name|System|Tab|min|Schritt|max|Einheit|
+  reine Konfiguration ohne Modul, in einem Shadow-DOM gekapselt (FHEMWEB-Themes überschreiben sonst generische CSS-Klassen).
+  Der Generator steht in `EMSPanel/ems_weblink_defmod.txt`, der Katalog (Name|System|Tab|min|Schritt|max|Einheit|
   Standard S9|Standard A9|Bezeichnung|Flags) als Attribut `comment` des Weblinks, Vorlage in `EMSPanel/ems_weblink_katalog_attr.txt`.
   Neuer oder gestrichener `$P->("name",default)` im Code bedeutet: Katalogzeile ergänzen bzw. entfernen (`EMSPanel/ems_katalog.txt` ist die Langfassung).
 - Alternative ohne eigene Seite: `EMSPanel/ems_slider_einzeiler.txt` setzt `setList`/`readingList` (Regler nur im Set-Feld).
