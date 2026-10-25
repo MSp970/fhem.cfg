@@ -8,15 +8,15 @@ Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (A
   Folgen: Adapter 1/8" NPT auf Rohrgewinde (mit PTFE-Band) und Netzdruck unter 6,9 bar. Eine Differenz von 1 bar ist mit zwei Sensoren (zusammen ±0,28 bar) sicher messbar, deshalb steht der Rückflussschutz bei 0,5 bar. Beide Sensoren drucklos auf 0 bar abgleichen (Offset in ESPHome).
 - **Durchflussmesser:** Außengewinde 1/2", 3/4", 1", 5–18 V (Strom 15 mA bei 5 V, Ausgang belastbar mit 10 mA), 1": 2–50 l/min, 1,75 MPa. Versorgung aus dem 5-V-Netzteil passt, die Schaltung belastet den Ausgang mit etwa 5 mA.
   Folgen: Unter 2 l/min messen die Sensoren nichts. Tropfende Schläuche erkennt man deshalb nur über Druckabfall und Pegel. Die Schwelle 1 l/min der Verbraucherwarnung löst praktisch erst ab etwa 2 l/min aus.
-  Für Q1 (Zisterne) nennt das Angebot kein 1 1/4": mit 1"-Sensor und Reduzierstücken bei maximal 50 l/min, sonst anderen Sensor wählen.
-  K-Faktor (Impulse pro Liter): steht im Angebot, in der ESPHome-Vorlage ist 450 ein Platzhalter.
+  Für Q1 (Zisterne) ist ein 1 1/4"-Sensor (108 Impulse/l), Q2 ein 1"-Sensor (476 Impulse/l).
+  K-Faktor: 476 Impulse/l (1") und 108 Impulse/l (1 1/4"), nach dem Einbau mit Eimer und Waage prüfen.
 
 ## Einbauorte und Konsequenz für die Logik
 
 | Messpunkt | Ort | FHEM-Device |
 |---|---|---|
 | P1 | Zisternenstrang zwischen Q1 und V6 | `Druck_Bewaesserung_bar` |
-| P3 (optional) | Sammler hinter der Zusammenführung | `Druck_Sammler_bar` |
+| P3 | Sammler hinter der Zusammenführung | `Druck_Sammler_bar` |
 | P2 | Trinkwasser zwischen V7 und Q2 | `Druck_Frischwasser_bar` |
 | Q1 | Zisternenstrang vor P1 | `Durchfluss_Zisterne_lmin` |
 | Q2 | Trinkwasser zwischen P2 und V8 | `Durchfluss_Frischwasser_lmin` |
@@ -26,7 +26,7 @@ Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (A
 **Lösung ohne Umbau (Messfenster):** Sobald im Frischwasserbetrieb eine Zone öffnet (Bedarf), geht V6 bei ausgeschalteter Pumpe kurz auf (8 s, Pumpe mind. 20 s aus). Dann misst P1 den Druck der Bewässerungsseite, die Logik speichert ihn (`Wasserquelle:snap_p`) und schließt V6 wieder. Danach öffnet V7, und V8 erst, wenn P2 mindestens 1 bar über diesem Wert liegt. Die Messung gilt 180 s. V6 und V7/V8 sind dabei nie gleichzeitig offen.
 Grenze: Nach dem Öffnen von V8 gibt es keinen laufenden Vergleich mehr, nur den Rückflussverhinderer und die Plausibilität von P2.
 
-**Besser mit dritter Messstelle P3 (optional, `Druck_Sammler_bar`):** ein Drucksensor am Sammler hinter der Zusammenführung, ESPHome-Kanal A2 (gleicher Spannungsteiler). Ist P3 gültig, entfällt das Messfenster (V6 bleibt zu), und die Logik prüft laufend: liegt P3 mehr als 0,3 bar über P2, schließen V8 und V7 sofort.
+**Dritte Messstelle P3 (wird eingebaut, `Druck_Sammler_bar`):** ein Drucksensor am Sammler hinter der Zusammenführung, ESPHome-Kanal A2 (gleicher Spannungsteiler). Ist P3 gültig, entfällt das Messfenster (V6 bleibt zu), und die Logik prüft laufend: liegt P3 mehr als 0,3 bar über P2, schließen V8 und V7 sofort.
 
 Q2 zwischen P2 und V8 misst nur, was durch V8 geht. Das passt zur Leckwarnung `frischwasser_ohne_zone`.
 
@@ -81,6 +81,16 @@ sensor:
           float vs = x * 1.5;
           if (vs < 0.4 || vs > 4.6) return NAN;
           return (vs - 0.5) / 4.0 * 100.0 * 0.0689476;
+  - platform: ads1115
+    multiplexer: A2_GND
+    gain: 4.096
+    name: druck_sammler_bar
+    update_interval: 2s
+    filters:
+      - lambda: |-
+          float vs = x * 1.5;
+          if (vs < 0.4 || vs > 4.6) return NAN;
+          return (vs - 0.5) / 4.0 * 100.0 * 0.0689476;
   - platform: pulse_meter
     pin: {number: GPIO25, mode: INPUT_PULLUP}
     name: durchfluss_zisterne_lmin
@@ -88,7 +98,7 @@ sensor:
     internal_filter: 200us
     timeout: 30s
     filters:
-      - lambda: return x / 450.0;   # 450 = Impulse pro Liter Q1 (G1 1/4"), laut Angebot anpassen
+      - lambda: return x / 108.0;   # 108 Impulse pro Liter, Q1 (G1 1/4")
   - platform: pulse_meter
     pin: {number: GPIO26, mode: INPUT_PULLUP}
     name: durchfluss_frischwasser_lmin
@@ -96,7 +106,7 @@ sensor:
     internal_filter: 200us
     timeout: 30s
     filters:
-      - lambda: return x / 450.0;   # Impulse pro Liter Q2 (G1"), anpassen
+      - lambda: return x / 476.0;   # 476 Impulse pro Liter, Q2 (G1")
 ```
 
 `x * 1.5` gleicht den Teiler 10k/20k aus (0,667). Ein Wert außerhalb 0,4–4,6 V (Drahtbruch, Kurzschluss) wird als `nan` gesendet und von der Logik als ungültig behandelt.

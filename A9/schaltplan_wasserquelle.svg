@@ -13,7 +13,7 @@
 <circle cx="400" cy="145" r="16" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="2"/>
 <text x="400" y="149" text-anchor="middle" fill="#222" font-size="12" font-weight="bold">Q1</text>
 <text x="400" y="179" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">Q1 Durchfluss</text>
-<text x="400" y="193" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">G1" (1 1/4" prüfen)</text>
+<text x="400" y="193" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">G1 1/4" (108 Imp/l)</text>
 <polyline points="416,145 640,145" fill="none" stroke="#1f5fa8" stroke-width="3"/>
 <line x1="480" y1="145" x2="480" y2="110" stroke="#1f5fa8" stroke-width="2"/>
 <circle cx="480" cy="110" r="15" fill="#fde7e7" stroke="#b02020" stroke-width="2"/>
@@ -26,7 +26,7 @@
 <line x1="700" y1="145" x2="700" y2="110" stroke="#1f5fa8" stroke-width="2" stroke-dasharray="5,3"/>
 <circle cx="700" cy="110" r="15" fill="#fde7e7" stroke="#2a8a2a" stroke-width="2" stroke-dasharray="5,3"/>
 <text x="700" y="114" text-anchor="middle" fill="#222" font-size="12" font-weight="bold">P3</text>
-<text x="700" y="88" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">P3 optional (Sammler, Dauerüberwachung)</text>
+<text x="700" y="88" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">P3 Sammler (Dauerüberwachung, Einbau geplant)</text>
 <text x="780" y="134" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">Zisterne-Pfad</text>
 <rect x="30" y="290" width="110" height="70" rx="5" fill="#f4f6f8" stroke="#444" stroke-width="1.5"/>
 <text x="85.0" y="322.0" text-anchor="middle" font-weight="bold">Trinkwasser</text>
@@ -43,7 +43,7 @@
 <circle cx="420" cy="325" r="16" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="2"/>
 <text x="420" y="329" text-anchor="middle" fill="#222" font-size="12" font-weight="bold">Q2</text>
 <text x="420" y="359" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">Q2 Durchfluss</text>
-<text x="420" y="373" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">1"</text>
+<text x="420" y="373" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">1" (476 Imp/l)</text>
 <polygon points="524,311 524,339 556,311 556,339" fill="#fff3d6" stroke="#b36b00" stroke-width="2"/>
 <text x="540" y="301" text-anchor="middle" fill="#222" font-size="12" font-weight="bold">V8</text>
 <text x="540" y="357" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">Relais 8</text>
@@ -71,60 +71,76 @@
 <text x="1135.0" y="833.0" text-anchor="middle" font-weight="normal">230 V → 5 V</text>
 <polyline points="1135,520 1135,780" fill="none" stroke="#c00000" stroke-width="3"/>
 <polyline points="1135,850 1135,980" fill="none" stroke="#000" stroke-width="3"/>
-<rect x="400" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
-<text x="465.0" y="565.0" text-anchor="middle" font-weight="bold">P1 Drucksensor</text>
-<text x="465.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 0–100 psi</text>
-<text x="465.0" y="593.0" text-anchor="middle" font-weight="normal">rot +5 V, schwarz GND, blau Signal</text>
-<polyline points="430,520 430,545" fill="none" stroke="#c00000" stroke-width="3"/>
-<polyline points="500,605 500,980" fill="none" stroke="#000" stroke-width="3"/>
-<polyline points="465,605 465,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<rect x="440" y="640" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<text x="465.0" y="659.0" text-anchor="middle" font-weight="bold">10 kΩ</text>
-<polyline points="465,670 465,705" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<rect x="440" y="705" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<text x="465.0" y="724.0" text-anchor="middle" font-weight="bold">20 kΩ</text>
-<polyline points="465,735 465,980" fill="none" stroke="#000" stroke-width="3"/>
-<polyline points="465,688 465,688" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<polyline points="465,688 485,688 485,615 680,615" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<rect x="540" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
-<text x="605.0" y="565.0" text-anchor="middle" font-weight="bold">P2 Drucksensor</text>
-<text x="605.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 0–100 psi</text>
-<text x="605.0" y="593.0" text-anchor="middle" font-weight="normal">rot +5 V, schwarz GND, blau Signal</text>
-<polyline points="570,520 570,545" fill="none" stroke="#c00000" stroke-width="3"/>
-<polyline points="640,605 640,980" fill="none" stroke="#000" stroke-width="3"/>
-<polyline points="605,605 605,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<rect x="580" y="640" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<text x="605.0" y="659.0" text-anchor="middle" font-weight="bold">10 kΩ</text>
-<polyline points="605,670 605,705" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<rect x="580" y="705" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<text x="605.0" y="724.0" text-anchor="middle" font-weight="bold">20 kΩ</text>
-<polyline points="605,735 605,980" fill="none" stroke="#000" stroke-width="3"/>
-<polyline points="605,688 605,688" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<polyline points="605,688 625,688 625,635 680,635" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="300" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
+<text x="365.0" y="565.0" text-anchor="middle" font-weight="bold">P1 Drucksensor</text>
+<text x="365.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 100 psi</text>
+<text x="365.0" y="593.0" text-anchor="middle" font-weight="normal">rot 5V sw GND bl Sig.</text>
+<polyline points="330,520 330,545" fill="none" stroke="#c00000" stroke-width="3"/>
+<polyline points="400,605 400,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="365,605 365,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="340" y="640" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="365.0" y="659.0" text-anchor="middle" font-weight="bold">10 kΩ</text>
+<polyline points="365,670 365,705" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="340" y="705" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="365.0" y="724.0" text-anchor="middle" font-weight="bold">20 kΩ</text>
+<polyline points="365,735 365,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="365,688 365,688" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<polyline points="365,688 385,688 385,615 760,615" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="440" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
+<text x="505.0" y="565.0" text-anchor="middle" font-weight="bold">P2 Drucksensor</text>
+<text x="505.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 100 psi</text>
+<text x="505.0" y="593.0" text-anchor="middle" font-weight="normal">rot 5V sw GND bl Sig.</text>
+<polyline points="470,520 470,545" fill="none" stroke="#c00000" stroke-width="3"/>
+<polyline points="540,605 540,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="505,605 505,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="480" y="640" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="505.0" y="659.0" text-anchor="middle" font-weight="bold">10 kΩ</text>
+<polyline points="505,670 505,705" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="480" y="705" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="505.0" y="724.0" text-anchor="middle" font-weight="bold">20 kΩ</text>
+<polyline points="505,735 505,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="505,688 505,688" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<polyline points="505,688 525,688 525,635 760,635" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="580" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
+<text x="645.0" y="565.0" text-anchor="middle" font-weight="bold">P3 Drucksensor</text>
+<text x="645.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 100 psi</text>
+<text x="645.0" y="593.0" text-anchor="middle" font-weight="normal">rot 5V sw GND bl Sig.</text>
+<polyline points="610,520 610,545" fill="none" stroke="#c00000" stroke-width="3"/>
+<polyline points="680,605 680,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="645,605 645,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="620" y="640" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="645.0" y="659.0" text-anchor="middle" font-weight="bold">10 kΩ</text>
+<polyline points="645,670 645,705" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<rect x="620" y="705" width="50" height="30" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="645.0" y="724.0" text-anchor="middle" font-weight="bold">20 kΩ</text>
+<polyline points="645,735 645,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="645,688 645,688" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<polyline points="645,688 665,688 665,655 760,655" fill="none" stroke="#2a8a2a" stroke-width="3"/>
 <text x="530" y="757" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">Teiler 10k/20k: 0,5–4,5 V → 0,33–3,0 V</text>
-<rect x="680" y="600" width="130" height="120" rx="5" fill="#eef2ff" stroke="#444" stroke-width="1.5"/>
-<text x="745.0" y="636.0" text-anchor="middle" font-weight="bold">ADS1115</text>
-<text x="745.0" y="650.0" text-anchor="middle" font-weight="normal">16 bit I²C</text>
-<text x="745.0" y="664.0" text-anchor="middle" font-weight="normal">A0 ← P1 (Teiler)</text>
-<text x="745.0" y="678.0" text-anchor="middle" font-weight="normal">A1 ← P2 (Teiler)</text>
-<text x="745.0" y="692.0" text-anchor="middle" font-weight="normal">VDD 3,3 V, 0x48</text>
-<rect x="900" y="580" width="150" height="150" rx="5" fill="#eef2ff" stroke="#444" stroke-width="1.5"/>
-<text x="975.0" y="617.0" text-anchor="middle" font-weight="bold">ESP32 DevKit</text>
-<text x="975.0" y="631.0" text-anchor="middle" font-weight="normal">ESPHome</text>
-<text x="975.0" y="645.0" text-anchor="middle" font-weight="normal">GPIO21 SDA</text>
-<text x="975.0" y="659.0" text-anchor="middle" font-weight="normal">GPIO22 SCL</text>
-<text x="975.0" y="673.0" text-anchor="middle" font-weight="normal">GPIO25 ← Opto Q1</text>
-<text x="975.0" y="687.0" text-anchor="middle" font-weight="normal">GPIO26 ← Opto Q2</text>
-<text x="975.0" y="701.0" text-anchor="middle" font-weight="normal">5 V vom Rail</text>
-<polyline points="810,640 900,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<text x="855" y="634" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">SDA</text>
-<polyline points="810,660 900,660" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<text x="855" y="676" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">SCL</text>
-<polyline points="960,520 960,580" fill="none" stroke="#c00000" stroke-width="3"/>
-<polyline points="975,730 975,980" fill="none" stroke="#000" stroke-width="3"/>
-<polyline points="745,720 745,980" fill="none" stroke="#000" stroke-width="3"/>
+<rect x="760" y="600" width="130" height="120" rx="5" fill="#eef2ff" stroke="#444" stroke-width="1.5"/>
+<text x="825.0" y="629.0" text-anchor="middle" font-weight="bold">ADS1115</text>
+<text x="825.0" y="643.0" text-anchor="middle" font-weight="normal">16 bit I²C</text>
+<text x="825.0" y="657.0" text-anchor="middle" font-weight="normal">A0 ← P1</text>
+<text x="825.0" y="671.0" text-anchor="middle" font-weight="normal">A1 ← P2</text>
+<text x="825.0" y="685.0" text-anchor="middle" font-weight="normal">A2 ← P3</text>
+<text x="825.0" y="699.0" text-anchor="middle" font-weight="normal">VDD 3,3 V, 0x48</text>
+<rect x="950" y="580" width="150" height="150" rx="5" fill="#eef2ff" stroke="#444" stroke-width="1.5"/>
+<text x="1025.0" y="617.0" text-anchor="middle" font-weight="bold">ESP32 DevKit</text>
+<text x="1025.0" y="631.0" text-anchor="middle" font-weight="normal">ESPHome</text>
+<text x="1025.0" y="645.0" text-anchor="middle" font-weight="normal">GPIO21 SDA</text>
+<text x="1025.0" y="659.0" text-anchor="middle" font-weight="normal">GPIO22 SCL</text>
+<text x="1025.0" y="673.0" text-anchor="middle" font-weight="normal">GPIO25 ← Opto Q1</text>
+<text x="1025.0" y="687.0" text-anchor="middle" font-weight="normal">GPIO26 ← Opto Q2</text>
+<text x="1025.0" y="701.0" text-anchor="middle" font-weight="normal">5 V vom Rail</text>
+<polyline points="890,640 950,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<text x="920" y="634" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">SDA</text>
+<polyline points="890,660 950,660" fill="none" stroke="#2a8a2a" stroke-width="3"/>
+<text x="920" y="676" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">SCL</text>
+<polyline points="1010,520 1010,580" fill="none" stroke="#c00000" stroke-width="3"/>
+<polyline points="1025,730 1025,980" fill="none" stroke="#000" stroke-width="3"/>
+<polyline points="825,720 825,980" fill="none" stroke="#000" stroke-width="3"/>
 <rect x="30" y="780" width="170" height="60" rx="5" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="1.5"/>
-<text x="115.0" y="800.0" text-anchor="middle" font-weight="bold">Q1 Durchflussmesser (G1" laut Angebot)</text>
+<text x="115.0" y="800.0" text-anchor="middle" font-weight="bold">Q1 Durchflussmesser G1 1/4"</text>
 <text x="115.0" y="814.0" text-anchor="middle" font-weight="normal">5–18 V, 2–50 l/min, Hall-Impuls</text>
 <text x="115.0" y="828.0" text-anchor="middle" font-weight="normal">+5 V / GND / Signal</text>
 <rect x="30" y="870" width="170" height="60" rx="5" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="1.5"/>
@@ -139,9 +155,9 @@
 <text x="305.0" y="908.0" text-anchor="middle" font-weight="normal">470 Ω → PC817 LED</text>
 <polyline points="200,806 230,806" fill="none" stroke="#2a8a2a" stroke-width="3"/>
 <polyline points="200,896 230,896" fill="none" stroke="#2a8a2a" stroke-width="3"/>
-<polyline points="380,807 900,807 900,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
-<polyline points="380,897 930,897 930,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
+<polyline points="380,807 965,807 965,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
+<polyline points="380,897 995,897 995,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
 <text x="700" y="800" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">PC817 Kollektor → GPIO25 (Pull-up 10 kΩ nach 3,3 V, Emitter GND)</text>
 <text x="700" y="890" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">PC817 Kollektor → GPIO26 (Pull-up 10 kΩ nach 3,3 V, Emitter GND)</text>
-<text x="20" y="1002" text-anchor="start" fill="#222" font-size="11" font-weight="normal">FHEM: Druck_Bewaesserung_bar = P1, Druck_Frischwasser_bar = P2, Durchfluss_Zisterne_lmin = Q1, Durchfluss_Frischwasser_lmin = Q2. Sensordaten (0,5–4,5 V, 5 V) sind angenommen, Angebot prüfen.</text>
+<text x="20" y="1002" text-anchor="start" fill="#222" font-size="11" font-weight="normal">FHEM: Druck_Bewaesserung_bar = P1, Druck_Sammler_bar = P3, Druck_Frischwasser_bar = P2, Durchfluss_Zisterne_lmin = Q1, Durchfluss_Frischwasser_lmin = Q2. Sensordaten laut Angebot.</text>
 </svg>
