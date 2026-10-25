@@ -1,30 +1,37 @@
 # A9 Messtechnik Wasserquelle (Durchfluss und Druck)
 
-Plan: `schaltplan_wasserquelle.svg`. Entwurf, Positionen und Typen vor der Montage prüfen.
+Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (AliExpress-Seiten waren nicht abrufbar), vor dem Anschluss am Angebot bzw. Sensor prüfen.
 
-## Messpunkte und Zuordnung in FHEM
+## Annahmen zu den Sensoren
 
-| Messpunkt | Ort | FHEM-Device | Einheit |
-|---|---|---|---|
-| P1 | Bewässerungsseite, hinter der Zusammenführung von V6 und V8 | `Druck_Bewaesserung_bar` | bar |
-| P2 | Trinkwasser, zwischen V7 und V8 | `Druck_Frischwasser_bar` | bar |
-| Q1 | Zisternenstrang vor V6 | `Durchfluss_Zisterne_lmin` | l/min |
-| Q2 | Trinkwasserstrang | `Durchfluss_Frischwasser_lmin` | l/min |
+- **Drucksensor 100 psi** (= 6,89 bar): üblich 3 Draht, 5 V, Ausgang 0,5–4,5 V ratiometrisch. Aderfarben und Ausgang vor dem Anschließen prüfen, falls das Angebot 4–20 mA nennt, gilt statt Teiler ein Shunt 150 Ω (Strom 4–20 mA ergibt 0,6–3,0 V).
+  Netzdruck darf 6,9 bar nicht erreichen (Überlast), ggf. 150 psi nehmen.
+- **Durchflussmesser G1" (Trinkwasser) und G1 1/4" (Zisterne)**: Hall-Turbine mit Impulsausgang, 3 Draht (+, GND, Signal). Versorgung 5 V (die Typen laufen meist ab 5 V). Impulse pro Liter (K-Faktor) steht im Angebot, danach mit Eimer und Waage kalibrieren.
 
-Warum P1 hinter der Zusammenführung: Nur dort zeigt er bei geschlossenem V6 den Druck der Bewässerungsseite. Sitzt er vor V6, misst er den Pumpendruck, und die Bedingung "≥ 1 bar Differenz" ist wertlos.
+## Einbauorte und Konsequenz für die Logik
+
+| Messpunkt | Ort | FHEM-Device |
+|---|---|---|
+| P1 | Zisternenstrang zwischen Q1 und V6 | `Druck_Bewaesserung_bar` |
+| P2 | Trinkwasser zwischen V7 und Q2 | `Druck_Frischwasser_bar` |
+| Q1 | Zisternenstrang vor P1 | `Durchfluss_Zisterne_lmin` |
+| Q2 | Trinkwasser zwischen P2 und V8 | `Durchfluss_Frischwasser_lmin` |
+
+**Problem:** P1 sitzt vor V6. Im Frischwasserbetrieb ist V6 zu, P1 sieht dann nur die Zisternenleitung und nicht die Bewässerungsseite. Die Bedingung "Bewässerung mind. 1 bar unter Frischwasser" ist damit nicht prüfbar. Die Logik hält V8 darum gesperrt (`$p1_hinter_v6 = 0`, Grund `stufe2_gesperrt_p1_sitzt_vor_v6`). V7 öffnet trotzdem, V8 trennt weiter.
+**Lösung:** P1 auf die Bewässerungsseite versetzen (hinter V6 bzw. in den Sammler hinter der Zusammenführung, im Plan P1*), danach in `Wasserquelle_Steuerung` `$p1_hinter_v6 = 1` setzen. Alternativ einen dritten Drucksensor dort einbauen.
+
+Q2 zwischen P2 und V8 misst nur, was durch V8 geht. Das passt zur Leckwarnung `frischwasser_ohne_zone`.
 
 ## Stückliste
 
-- 2 × Drucktransmitter 4–20 mA, 0–10 bar (Edelstahl, G1/4, 2-Leiter, 24 V). Bei 0–16 bar sinkt die Auflösung, 0–10 bar reicht bei Netzdruck bis ca. 6 bar.
-- 2 × Hall-Turbinen-Durchflussmesser mit Impulsausgang (NPN Open Collector), passend zum Rohr (DN20 bis DN25, Messbereich ca. 1–60 l/min). K-Faktor (Impulse pro Liter) laut Datenblatt, danach mit Eimer und Waage kalibrieren.
+- 2 × Drucksensor 100 psi (vorhanden), Anschluss laut Angebot, T-Stücke und Dichtungen passend.
+- 2 × Hall-Durchflussmesser (vorhanden): G1" und G1 1/4".
 - 1 × ADS1115-Modul (16 bit, I²C).
-- 2 × Shunt 150 Ω, 0,1 %, je 4–20 mA ergibt 0,6–3,0 V.
-- Je Eingang 1 kΩ in Reihe, 100 nF nach GND und Z-Diode 3,3 V als Schutz.
-- 2 × Optokoppler PC817 mit je 2,2 kΩ von +24 V und Pull-up 10 kΩ nach 3,3 V.
-- 1 × ESP32 DevKit (nutzt ESPHome und das vorhandene MQTT).
-- 1 × Netzteil 24 V DC, 1,5 A, Hutschiene. 1 × Step-Down 24 V auf 5 V.
-- Dichtungen, T-Stücke G1/4 für die Drucktransmitter, Absperrhähne vor jedem Sensor.
-- Sicherung 1 A auf der 24-V-Seite.
+- 4 × Widerstand 10 kΩ und 20 kΩ (2 Teiler 10k/20k, 1 %), je 100 nF nach GND am ADS-Eingang.
+- 2 × Optokoppler PC817 mit 470 Ω (zur LED), 1 kΩ Pull-up nach +5 V am Sensorsignal und 10 kΩ Pull-up nach 3,3 V am Kollektor.
+- 1 × ESP32 DevKit (ESPHome, vorhandenes MQTT).
+- 1 × Netzteil 5 V DC, 3 A, Hutschiene (stabil, Sensoren sind ratiometrisch). Sicherung 1 A.
+- Absperrhähne vor jedem Sensor, damit sich Sensoren tauschen lassen.
 
 Pi-GPIO nicht für Impulse nutzen: FHEM hängt am GPIO (siehe Hinweis "wegen FHEM freeze" in der cfg).
 
@@ -53,9 +60,9 @@ sensor:
     update_interval: 2s
     filters:
       - lambda: |-
-          float mA = x / 150.0 * 1000.0;
-          if (mA < 3.5 || mA > 21.0) return NAN;
-          return (mA - 4.0) / 16.0 * 10.0;
+          float vs = x * 1.5;
+          if (vs < 0.4 || vs > 4.6) return NAN;
+          return (vs - 0.5) / 4.0 * 100.0 * 0.0689476;
   - platform: ads1115
     multiplexer: A1_GND
     gain: 4.096
@@ -63,9 +70,9 @@ sensor:
     update_interval: 2s
     filters:
       - lambda: |-
-          float mA = x / 150.0 * 1000.0;
-          if (mA < 3.5 || mA > 21.0) return NAN;
-          return (mA - 4.0) / 16.0 * 10.0;
+          float vs = x * 1.5;
+          if (vs < 0.4 || vs > 4.6) return NAN;
+          return (vs - 0.5) / 4.0 * 100.0 * 0.0689476;
   - platform: pulse_meter
     pin: {number: GPIO25, mode: INPUT_PULLUP}
     name: durchfluss_zisterne_lmin
@@ -73,7 +80,7 @@ sensor:
     internal_filter: 200us
     timeout: 30s
     filters:
-      - lambda: return x / 450.0;   # 450 = K-Faktor Impulse/Liter, anpassen
+      - lambda: return x / 450.0;   # 450 = Impulse pro Liter Q1 (G1 1/4"), laut Angebot anpassen
   - platform: pulse_meter
     pin: {number: GPIO26, mode: INPUT_PULLUP}
     name: durchfluss_frischwasser_lmin
@@ -81,10 +88,10 @@ sensor:
     internal_filter: 200us
     timeout: 30s
     filters:
-      - lambda: return x / 450.0;
+      - lambda: return x / 450.0;   # Impulse pro Liter Q2 (G1"), anpassen
 ```
 
-Ein ungültiger Messwert (Drahtbruch, unter 3,5 mA) wird als `nan` gesendet. Die Logik in FHEM behandelt das als ungültig und schließt die Frischwasser-Relais.
+`x * 1.5` gleicht den Teiler 10k/20k aus (0,667). Ein Wert außerhalb 0,4–4,6 V (Drahtbruch, Kurzschluss) wird als `nan` gesendet und von der Logik als ungültig behandelt.
 
 ## Übergabe an FHEM
 
