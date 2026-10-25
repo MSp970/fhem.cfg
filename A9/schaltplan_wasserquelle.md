@@ -13,12 +13,17 @@ Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (A
 | Messpunkt | Ort | FHEM-Device |
 |---|---|---|
 | P1 | Zisternenstrang zwischen Q1 und V6 | `Druck_Bewaesserung_bar` |
+| P3 (optional) | Sammler hinter der Zusammenführung | `Druck_Sammler_bar` |
 | P2 | Trinkwasser zwischen V7 und Q2 | `Druck_Frischwasser_bar` |
 | Q1 | Zisternenstrang vor P1 | `Durchfluss_Zisterne_lmin` |
 | Q2 | Trinkwasser zwischen P2 und V8 | `Durchfluss_Frischwasser_lmin` |
 
-**Problem:** P1 sitzt vor V6. Im Frischwasserbetrieb ist V6 zu, P1 sieht dann nur die Zisternenleitung und nicht die Bewässerungsseite. Die Bedingung "Bewässerung mind. 1 bar unter Frischwasser" ist damit nicht prüfbar. Die Logik hält V8 darum gesperrt (`$p1_hinter_v6 = 0`, Grund `stufe2_gesperrt_p1_sitzt_vor_v6`). V7 öffnet trotzdem, V8 trennt weiter.
-**Lösung:** P1 auf die Bewässerungsseite versetzen (hinter V6 bzw. in den Sammler hinter der Zusammenführung, im Plan P1*), danach in `Wasserquelle_Steuerung` `$p1_hinter_v6 = 1` setzen. Alternativ einen dritten Drucksensor dort einbauen.
+**Problem:** P1 sitzt vor V6. Im Frischwasserbetrieb ist V6 zu, P1 sieht dann nur die Zisternenleitung, nicht die Bewässerungsseite.
+
+**Lösung ohne Umbau (Messfenster):** Sobald im Frischwasserbetrieb eine Zone öffnet (Bedarf), geht V6 bei ausgeschalteter Pumpe kurz auf (8 s, Pumpe mind. 20 s aus). Dann misst P1 den Druck der Bewässerungsseite, die Logik speichert ihn (`Wasserquelle:snap_p`) und schließt V6 wieder. Danach öffnet V7, und V8 erst, wenn P2 mindestens 1 bar über diesem Wert liegt. Die Messung gilt 180 s. V6 und V7/V8 sind dabei nie gleichzeitig offen.
+Grenze: Nach dem Öffnen von V8 gibt es keinen laufenden Vergleich mehr, nur den Rückflussverhinderer und die Plausibilität von P2.
+
+**Besser mit dritter Messstelle P3 (optional, `Druck_Sammler_bar`):** ein Drucksensor am Sammler hinter der Zusammenführung, ESPHome-Kanal A2 (gleicher Spannungsteiler). Ist P3 gültig, entfällt das Messfenster (V6 bleibt zu), und die Logik prüft laufend: liegt P3 mehr als 0,3 bar über P2, schließen V8 und V7 sofort.
 
 Q2 zwischen P2 und V8 misst nur, was durch V8 geht. Das passt zur Leckwarnung `frischwasser_ohne_zone`.
 
