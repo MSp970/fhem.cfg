@@ -13,7 +13,7 @@
 <circle cx="400" cy="145" r="16" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="2"/>
 <text x="400" y="149" text-anchor="middle" fill="#222" font-size="12" font-weight="bold">Q1</text>
 <text x="400" y="179" text-anchor="middle" fill="#222" font-size="11" font-weight="normal">Q1 Durchfluss</text>
-<text x="400" y="193" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">1 1/4"</text>
+<text x="400" y="193" text-anchor="middle" fill="#555" font-size="10" font-weight="normal">G1" (1 1/4" prüfen)</text>
 <polyline points="416,145 640,145" fill="none" stroke="#1f5fa8" stroke-width="3"/>
 <line x1="480" y1="145" x2="480" y2="110" stroke="#1f5fa8" stroke-width="2"/>
 <circle cx="480" cy="110" r="15" fill="#fde7e7" stroke="#b02020" stroke-width="2"/>
@@ -74,7 +74,7 @@
 <rect x="400" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
 <text x="465.0" y="565.0" text-anchor="middle" font-weight="bold">P1 Drucksensor</text>
 <text x="465.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 0–100 psi</text>
-<text x="465.0" y="593.0" text-anchor="middle" font-weight="normal">(3-Draht, 5 V)</text>
+<text x="465.0" y="593.0" text-anchor="middle" font-weight="normal">rot +5 V, schwarz GND, blau Signal</text>
 <polyline points="430,520 430,545" fill="none" stroke="#c00000" stroke-width="3"/>
 <polyline points="500,605 500,980" fill="none" stroke="#000" stroke-width="3"/>
 <polyline points="465,605 465,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
@@ -89,7 +89,7 @@
 <rect x="540" y="545" width="130" height="60" rx="5" fill="#fde7e7" stroke="#b02020" stroke-width="1.5"/>
 <text x="605.0" y="565.0" text-anchor="middle" font-weight="bold">P2 Drucksensor</text>
 <text x="605.0" y="579.0" text-anchor="middle" font-weight="normal">0,5–4,5 V, 0–100 psi</text>
-<text x="605.0" y="593.0" text-anchor="middle" font-weight="normal">(3-Draht, 5 V)</text>
+<text x="605.0" y="593.0" text-anchor="middle" font-weight="normal">rot +5 V, schwarz GND, blau Signal</text>
 <polyline points="570,520 570,545" fill="none" stroke="#c00000" stroke-width="3"/>
 <polyline points="640,605 640,980" fill="none" stroke="#000" stroke-width="3"/>
 <polyline points="605,605 605,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
@@ -124,12 +124,12 @@
 <polyline points="975,730 975,980" fill="none" stroke="#000" stroke-width="3"/>
 <polyline points="745,720 745,980" fill="none" stroke="#000" stroke-width="3"/>
 <rect x="30" y="780" width="170" height="60" rx="5" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="1.5"/>
-<text x="115.0" y="800.0" text-anchor="middle" font-weight="bold">Q1 Durchflussmesser G1 1/4"</text>
-<text x="115.0" y="814.0" text-anchor="middle" font-weight="normal">Hall-Turbine 3-Draht</text>
+<text x="115.0" y="800.0" text-anchor="middle" font-weight="bold">Q1 Durchflussmesser (G1" laut Angebot)</text>
+<text x="115.0" y="814.0" text-anchor="middle" font-weight="normal">5–18 V, 2–50 l/min, Hall-Impuls</text>
 <text x="115.0" y="828.0" text-anchor="middle" font-weight="normal">+5 V / GND / Signal</text>
 <rect x="30" y="870" width="170" height="60" rx="5" fill="#e3f2e3" stroke="#2c7a2c" stroke-width="1.5"/>
 <text x="115.0" y="890.0" text-anchor="middle" font-weight="bold">Q2 Durchflussmesser G1"</text>
-<text x="115.0" y="904.0" text-anchor="middle" font-weight="normal">Hall-Turbine 3-Draht</text>
+<text x="115.0" y="904.0" text-anchor="middle" font-weight="normal">5–18 V, 2–50 l/min, Hall-Impuls</text>
 <text x="115.0" y="918.0" text-anchor="middle" font-weight="normal">+5 V / GND / Signal</text>
 <rect x="230" y="785" width="150" height="44" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
 <text x="305.0" y="804.0" text-anchor="middle" font-weight="bold">1 kΩ Pull-up nach +5 V</text>

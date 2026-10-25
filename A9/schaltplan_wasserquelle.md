@@ -2,11 +2,14 @@
 
 Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (AliExpress-Seiten waren nicht abrufbar), vor dem Anschluss am Angebot bzw. Sensor prüfen.
 
-## Annahmen zu den Sensoren
+## Sensordaten (laut Angebot)
 
-- **Drucksensor 100 psi** (= 6,89 bar): üblich 3 Draht, 5 V, Ausgang 0,5–4,5 V ratiometrisch. Aderfarben und Ausgang vor dem Anschließen prüfen, falls das Angebot 4–20 mA nennt, gilt statt Teiler ein Shunt 150 Ω (Strom 4–20 mA ergibt 0,6–3,0 V).
-  Netzdruck darf 6,9 bar nicht erreichen (Überlast), ggf. 150 psi nehmen.
-- **Durchflussmesser G1" (Trinkwasser) und G1 1/4" (Zisterne)**: Hall-Turbine mit Impulsausgang, 3 Draht (+, GND, Signal). Versorgung 5 V (die Typen laufen meist ab 5 V). Impulse pro Liter (K-Faktor) steht im Angebot, danach mit Eimer und Waage kalibrieren.
+- **Drucksensor:** 0–100 psi (6,89 bar), Ausgang 0,5–4,5 V linear (0 psi = 0,5 V, 50 psi = 2,5 V, 100 psi = 4,5 V), 5 V, Genauigkeit 2 % vom Endwert (±0,14 bar je Sensor), Gewinde 1/8"-27 NPT, Kabel rot +5 V, schwarz GND, blau Signal.
+  Folgen: Adapter 1/8" NPT auf Rohrgewinde (mit PTFE-Band) und Netzdruck unter 6,9 bar. Eine Differenz von 1 bar ist mit zwei Sensoren (zusammen ±0,28 bar) sicher messbar, deshalb steht der Rückflussschutz bei 0,5 bar. Beide Sensoren drucklos auf 0 bar abgleichen (Offset in ESPHome).
+- **Durchflussmesser:** Außengewinde 1/2", 3/4", 1", 5–18 V (Strom 15 mA bei 5 V, Ausgang belastbar mit 10 mA), 1": 2–50 l/min, 1,75 MPa. Versorgung aus dem 5-V-Netzteil passt, die Schaltung belastet den Ausgang mit etwa 5 mA.
+  Folgen: Unter 2 l/min messen die Sensoren nichts. Tropfende Schläuche erkennt man deshalb nur über Druckabfall und Pegel. Die Schwelle 1 l/min der Verbraucherwarnung löst praktisch erst ab etwa 2 l/min aus.
+  Für Q1 (Zisterne) nennt das Angebot kein 1 1/4": mit 1"-Sensor und Reduzierstücken bei maximal 50 l/min, sonst anderen Sensor wählen.
+  K-Faktor (Impulse pro Liter): steht im Angebot, in der ESPHome-Vorlage ist 450 ein Platzhalter.
 
 ## Einbauorte und Konsequenz für die Logik
 
