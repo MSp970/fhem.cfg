@@ -6,7 +6,7 @@ Plan: `schaltplan_wasserquelle.svg`. Entwurf. Die Sensordaten sind angenommen (A
 
 - **Drucksensor:** 0–100 psi (6,89 bar), Ausgang 0,5–4,5 V linear (0 psi = 0,5 V, 50 psi = 2,5 V, 100 psi = 4,5 V), 5 V, Genauigkeit 2 % vom Endwert (±0,14 bar je Sensor), Gewinde 1/8"-27 NPT, Kabel rot +5 V, schwarz GND, blau Signal.
   Folgen: Adapter 1/8" NPT auf Rohrgewinde (mit PTFE-Band) und Netzdruck unter 6,9 bar. Eine Differenz von 1 bar ist mit zwei Sensoren (zusammen ±0,28 bar) sicher messbar, deshalb steht der Rückflussschutz bei 0,5 bar. Beide Sensoren drucklos auf 0 bar abgleichen (Offset in ESPHome).
-- **Durchflussmesser:** Außengewinde 1/2", 3/4", 1", 5–18 V (Strom 15 mA bei 5 V, Ausgang belastbar mit 10 mA), 1": 2–50 l/min, 1,75 MPa. Versorgung aus dem 5-V-Netzteil passt, die Schaltung belastet den Ausgang mit etwa 5 mA.
+- **Durchflussmesser:** Außengewinde 1/2", 3/4", 1", 5–18 V (Strom 15 mA bei 5 V, Ausgang belastbar mit 10 mA), 1": 2–50 l/min, 1,75 MPa. Versorgung aus dem 5-V-Netzteil passt, der Level-Converter belastet den Ausgang nur mit etwa 0,5 mA.
   Folgen: Unter 2 l/min messen die Sensoren nichts. Tropfende Schläuche erkennt man deshalb nur über Druckabfall und Pegel. Die Schwelle 1 l/min der Verbraucherwarnung löst praktisch erst ab etwa 2 l/min aus.
   Für Q1 (Zisterne) ist ein 1 1/4"-Sensor (108 Impulse/l), Q2 ein 1"-Sensor (476 Impulse/l).
   K-Faktor: 476 Impulse/l (1") und 108 Impulse/l (1 1/4"), nach dem Einbau mit Eimer und Waage prüfen.
@@ -36,7 +36,7 @@ Q2 zwischen P2 und V8 misst nur, was durch V8 geht. Das passt zur Leckwarnung `f
 - 2 × Hall-Durchflussmesser (vorhanden): G1" und G1 1/4".
 - 1 × ADS1115-Modul (16 bit, I²C).
 - 4 × Widerstand 10 kΩ und 20 kΩ (2 Teiler 10k/20k, 1 %), je 100 nF nach GND am ADS-Eingang.
-- 2 × Optokoppler PC817 mit 470 Ω (zur LED), 1 kΩ Pull-up nach +5 V am Sensorsignal und 10 kΩ Pull-up nach 3,3 V am Kollektor.
+- 1 × Level-Converter, 2 Kanäle, BSS138 (vorhanden, 2 Transistoren, 8 Widerstände): HV an +5 V, LV an 3,3 V vom ESP32, GND gemeinsam, Signal Q1 an HV1 und LV1 an GPIO25, Signal Q2 an HV2 und LV2 an GPIO26. Die Pull-ups sitzen auf dem Modul, das Signal ist nicht invertiert.
 - 1 × ESP32 DevKit (ESPHome, vorhandenes MQTT).
 - 1 × Netzteil 5 V DC, 3 A, Hutschiene (stabil, Sensoren sind ratiometrisch). Sicherung 1 A.
 - Absperrhähne vor jedem Sensor, damit sich Sensoren tauschen lassen.
