@@ -129,8 +129,8 @@
 <text x="1025.0" y="631.0" text-anchor="middle" font-weight="normal">ESPHome</text>
 <text x="1025.0" y="645.0" text-anchor="middle" font-weight="normal">GPIO21 SDA</text>
 <text x="1025.0" y="659.0" text-anchor="middle" font-weight="normal">GPIO22 SCL</text>
-<text x="1025.0" y="673.0" text-anchor="middle" font-weight="normal">GPIO25 ← Q1 (LV1)</text>
-<text x="1025.0" y="687.0" text-anchor="middle" font-weight="normal">GPIO26 ← Q2 (LV2)</text>
+<text x="1025.0" y="673.0" text-anchor="middle" font-weight="normal">GPIO25 ← Q1 (TXI)</text>
+<text x="1025.0" y="687.0" text-anchor="middle" font-weight="normal">GPIO26 ← Q2 (RXO)</text>
 <text x="1025.0" y="701.0" text-anchor="middle" font-weight="normal">5 V vom Rail</text>
 <polyline points="890,640 950,640" fill="none" stroke="#2a8a2a" stroke-width="3"/>
 <text x="920" y="634" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">SDA</text>
@@ -149,15 +149,15 @@
 <text x="115.0" y="918.0" text-anchor="middle" font-weight="normal">+5 V / GND / Signal</text>
 <rect x="230" y="785" width="150" height="44" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
 <text x="305.0" y="804.0" text-anchor="middle" font-weight="bold">Level-Converter Kanal 1</text>
-<text x="305.0" y="818.0" text-anchor="middle" font-weight="normal">Q1 an HV1, LV1 an ESP</text>
+<text x="305.0" y="818.0" text-anchor="middle" font-weight="normal">Q1 an TXO (oben), TXI → ESP</text>
 <rect x="230" y="875" width="150" height="44" rx="5" fill="#fff" stroke="#444" stroke-width="1.5"/>
 <text x="305.0" y="894.0" text-anchor="middle" font-weight="bold">Level-Converter Kanal 2</text>
-<text x="305.0" y="908.0" text-anchor="middle" font-weight="normal">Q2 an HV2, LV2 an ESP</text>
+<text x="305.0" y="908.0" text-anchor="middle" font-weight="normal">Q2 an RXI (oben), RXO → ESP</text>
 <polyline points="200,806 230,806" fill="none" stroke="#2a8a2a" stroke-width="3"/>
 <polyline points="200,896 230,896" fill="none" stroke="#2a8a2a" stroke-width="3"/>
 <polyline points="380,807 965,807 965,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
 <polyline points="380,897 995,897 995,730" fill="none" stroke="#2a8a2a" stroke-width="2"/>
-<text x="660" y="800" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">LV1 → GPIO25 (LV an 3,3 V, HV an +5 V, GND gemeinsam)</text>
-<text x="660" y="890" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">LV2 → GPIO26 (BSS138-Modul mit eingebauten Pull-ups)</text>
+<text x="660" y="800" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">TXI → GPIO25 (LV an 3,3 V, HV an +5 V, GND gemeinsam)</text>
+<text x="660" y="890" text-anchor="middle" fill="#222" font-size="10" font-weight="normal">RXO → GPIO26 (BSS138-Modul mit eingebauten Pull-ups)</text>
 <text x="20" y="1002" text-anchor="start" fill="#222" font-size="11" font-weight="normal">FHEM: Druck_Bewaesserung_bar = P1, Druck_Sammler_bar = P3, Druck_Frischwasser_bar = P2, Durchfluss_Zisterne_lmin = Q1, Durchfluss_Frischwasser_lmin = Q2. Sensordaten laut Angebot.</text>
 </svg>

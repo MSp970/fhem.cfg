@@ -36,7 +36,7 @@ Q2 zwischen P2 und V8 misst nur, was durch V8 geht. Das passt zur Leckwarnung `f
 - 2 × Hall-Durchflussmesser (vorhanden): G1" und G1 1/4".
 - 1 × ADS1115-Modul (16 bit, I²C).
 - 4 × Widerstand 10 kΩ und 20 kΩ (2 Teiler 10k/20k, 1 %), je 100 nF nach GND am ADS-Eingang.
-- 1 × Level-Converter, 2 Kanäle, BSS138 (vorhanden, 2 Transistoren, 8 Widerstände): HV an +5 V, LV an 3,3 V vom ESP32, GND gemeinsam, Signal Q1 an HV1 und LV1 an GPIO25, Signal Q2 an HV2 und LV2 an GPIO26. Die Pull-ups sitzen auf dem Modul, das Signal ist nicht invertiert.
+- 1 × Level-Converter, 2 Kanäle, BSS138 (vorhanden, 2 Transistoren, 8 Widerstände): HV an +5 V, LV an 3,3 V vom ESP32, GND gemeinsam, Signal Q1 an TXO (obere Reihe) und TXI (untere Reihe) an GPIO25, Signal Q2 an RXI (obere Reihe) und RXO (untere Reihe) an GPIO26. Gleichnamige Pins links und rechts sind dasselbe Netz. Vor dem Einbau testen: 5 V an HV und 3,3 V an LV, im Ruhezustand 5 V an TXO/RXI und 3,3 V an TXI/RXO, TXO kurz gegen GND zieht TXI auf 0 V. Die Pull-ups sitzen auf dem Modul, das Signal ist nicht invertiert.
 - 1 × ESP32 DevKit (ESPHome, vorhandenes MQTT).
 - 1 × Netzteil 5 V DC, 3 A, Hutschiene (stabil, Sensoren sind ratiometrisch). Sicherung 1 A.
 - Absperrhähne vor jedem Sensor, damit sich Sensoren tauschen lassen.
