@@ -1,0 +1,33 @@
+# In FHEM/99_myUtils.pm einfügen (vor "1;"), danach "reload 99_myUtils"
+sub GoodWe_AkkuEnergie($$) {
+  my ($name,$mode) = @_;
+  my $hash = $defs{$name};
+  return 0 unless $hash;
+
+  my $H = ($hash->{helper}{akku} ||= {});
+
+  # Entladeenergie: Wert wurde beim Lade-Durchlauf berechnet
+  if ($mode eq "Entlade") {
+    return defined($H->{o}) ? sprintf("%.0f",$H->{o})
+                            : ReadingsNum($name,"Entladeenergie_raw",0);
+  }
+
+  my $p = ReadingsNum($name,"Power_Battery",0);
+  my $t = time();
+  my ($lp,$lt) = ($H->{p},$H->{t});
+  my $i = ReadingsNum($name,"Ladeenergie_raw",0);
+  my $o = ReadingsNum($name,"Entladeenergie_raw",0);
+
+  if (defined($lt) && defined($lp)) {
+    my $dt = $t - $lt;
+    $dt = 1800 if $dt > 1800;
+    $dt = 0    if $dt < 0;
+    if ($lp < 0) { $i += -$lp * $dt; }
+    else         { $o +=  $lp * $dt; }
+  }
+
+  $H->{p} = $p;
+  $H->{t} = $t;
+  $H->{o} = $o;
+  return sprintf("%.0f",$i);
+}
