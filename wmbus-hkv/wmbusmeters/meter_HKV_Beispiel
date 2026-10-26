@@ -1,0 +1,8 @@
+# nach /etc/wmbusmeters.d/HKV_Wohnzimmer kopieren (eine Datei je HKV)
+name=HKV_Wohnzimmer
+# Treiber passend zum Hersteller: qundis, minohca, ista..., techem..., bmeters ...
+# -> wmbusmeters --listdrivers
+driver=auto
+id=12345678
+# 32 Hex-Zeichen vom Messdienst; "NOKEY" falls unverschlüsselt
+key=00112233445566778899AABBCCDDEEFF
