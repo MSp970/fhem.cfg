@@ -25,6 +25,7 @@ iMinAbstandS|Laden|Ladestrom: Mindestabstand|Mindestzeit zwischen zwei Schreibzu
 iNurMode1|Laden|Ladestrom nur in Mode 1 schreiben|An: Der Ladestrom wird nur in Mode 1 gestuft geschrieben. In allen anderen Modi (außer 255) steht er auf iMaxA (10 A) und wird nur beim Moduswechsel einmal gesetzt; die Leistung steuert dort EMSPowerWatt. Aus = altes Verhalten (alle Modi, unverändert).||0|1|1|1|1|*|b
 iStopSofort|Laden|Abschalten (0 A) sofort|An: Das Abschalten des Ladestroms ignoriert den Mindestabstand.||0|1|1|1|1|*|b
 iSchnellSofort|Laden|Schnell-Reduzierung sofort|An: Die Reduzierung bei Netzbezug ignoriert den Mindestabstand.||0|1|1|1|1|*|b
+iFest|Laden|Max. Ladestrom fest auf iMaxA|An: Batterie_Ladestrom_Max steht dauerhaft auf iMaxA (10 A), auch in Mode 1; er ist nur die Obergrenze, die Leistung regelt der Wechselrichter bzw. EMSPowerWatt. Geschrieben wird nur, wenn der Ist-Wert abweicht (Flash). Aus = gestufte Regelung (iSchrittA/iMinAbstandS).||0|1|1|1|1|*|b
 iMaxFcA|Laden|Ladestrom bei guter Prognose|Reduzierter Ladestrom, wenn die Prognose den Ladebedarf deutlich übersteigt.|A|1|10|0.5|7|7|*
 iMaxFcFaktor|Laden|Prognosefaktor für reduzierten Strom|Prognose-Überschuss muss den Ladebedarf um diesen Faktor übersteigen.|×|1|3|0.1|1.3|1.3|*
 ladeStartW|Laden|Ladestart ab PV-Überschuss|PV minus Hausverbrauch, ab dem das Laden freigegeben wird.|W|0|2000|50|300|300|*

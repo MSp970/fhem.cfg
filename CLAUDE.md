@@ -47,3 +47,7 @@
   Alle anderen Modi (außer 255): Strom = `iMaxA` (10 A), einmalig beim Moduswechsel gesetzt (`i_mode`), nie 0 A; die Leistung geht über `EMSPowerWatt`.
   Eintritt in Mode 1 setzt den gestuften Wert sofort. Abschalten/Moduswechsel (`iStopSofort`) und Schnell-Reduzierung bei Netzbezug
   (`iSchnellSofort`) bleiben sofort. Alter Zustand: `iNurMode1=0`, `iSchrittA=0`, `iMinAbstandS=0`. Nicht wieder auf 0,05-A-Schritte zurückbauen.
+  **Maßgebliche Regel (Nutzervorgabe): `Batterie_Ladestrom_Max` ist nur die Obergrenze für den Ladestrom der Batterie, auch in Mode 1.**
+  Parameter `iFest` (Standard 1): Strom dauerhaft `iMaxA` (10 A) in allen Modi außer 255, nie 0 A, nur schreiben wenn der Ist-Wert abweicht;
+  die Leistung regelt der Wechselrichter bzw. `EMSPowerWatt`. Gestufte Regelung (`iSchrittA`/`iMinAbstandS`) nur bei `iFest=0`.
+  Einzeiler: `Einzeiler/ladestrom_fest_10A.txt`.
