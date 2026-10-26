@@ -1,0 +1,67 @@
+# ESP32 + CC1101 -> wM-Bus Empfänger für Heizkostenverteiler
+# Basis: https://github.com/SzczepanLeon/esphome-components
+# ACHTUNG: Komponenten-Syntax ändert sich zwischen Versionen -> gegen die
+# aktuelle README der Komponente prüfen (erster Build: Fehlermeldungen lesen).
+# secrets.yaml: wifi_ssid, wifi_password, mqtt_host (= FHEM-Rechner), ota_password,
+#               hkv_wz_id (z. B. 0x12345678), hkv_wz_key (32 Hex-Zeichen)
+
+esphome:
+  name: wmbus-hkv
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+mqtt:
+  broker: !secret mqtt_host      # FHEM MQTT2_SERVER, Port 1883
+  topic_prefix: wmbus-hkv        # LWT/Status: wmbus-hkv/status
+
+external_components:
+  - source: github://SzczepanLeon/esphome-components@main
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+wmbus_radio:
+  radio_type: CC1101
+  cs_pin: GPIO5
+  irq_pin: GPIO4                 # GDO0; kommt nichts an: GPIO2 (GDO2) probieren
+  frequency: 868.95MHz           # T1/C1
+  on_frame:
+    # Rohtelegramm-Log inkl. RSSI: hilfreich zum Finden der HKV-ID
+    - then:
+        - logger.log:
+            format: "wM-Bus RSSI=%d dBm len=%d %s"
+            args: [frame->rssi(), frame->data().size(), frame->as_hex().c_str()]
+            level: INFO
+
+wmbus_meter:
+  - id: hkv_wz
+    meter_id: !secret hkv_wz_id
+    type: qundis                 # Treiber je HKV-Hersteller (qundis, minohca, ...)
+    key: !secret hkv_wz_key      # entfällt bei unverschlüsselten Geräten
+    on_telegram:
+      then:
+        - wmbus_meter.send_telegram_with_mqtt:
+            topic: wmbus/HKV_Wohnzimmer   # <- hört FHEM (HKV_Wohnzimmer)
+
+# weitere HKV: Block oben kopieren (id, meter_id, key, topic wmbus/HKV_<Raum>)
+
+sensor:
+  - platform: wifi_signal
+    name: "wmbus-hkv WLAN"
+    update_interval: 5min

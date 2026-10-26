@@ -54,12 +54,19 @@ Kein Löten. In `wmbusmeters.conf`: `device=/dev/ttyUSB0:im871a:t1`
 * CC1101 ist **nicht 5-V-tolerant** – nur 3V3 verwenden.
 * Modul mit **868/915-MHz**-Anpassung kaufen (433-MHz-Module empfangen kaum).
 * Antenne: 86 mm starrer Draht an ANT (oder SMA-868-MHz-Antenne).
-* ESP32 sendet die Rohtelegramme (oder dekodiert) per MQTT; Firmware z. B.
-  `esphome-wmbus` / `wmbusmeters-esp` (Syntax je Version prüfen), Topic
-  `wmbus/raw`. Für die Dekodierung auf dem Pi dann
-  `wmbusmeters` mit `device=stdin:t1` o. ä. füttern oder die Treiber direkt im
-  ESP nutzen. **FHEM-Teil bleibt identisch**, solange pro Zähler JSON auf
-  `wmbus/<Name>` ankommt.
+* Firmware: ESPHome mit `esphome-wmbus` -> `esphome/wmbus-hkv.yaml`. Der ESP
+  dekodiert/entschlüsselt selbst (Treiber `type:` je Hersteller) und
+  veröffentlicht JSON direkt auf `wmbus/HKV_<Raum>` am FHEM-MQTT-Server.
+  **`wmbusmeters` auf dem Pi ist dann nicht nötig** (Schritte 1–3 unten
+  entfallen), der FHEM-Teil bleibt identisch.
+* Inbetriebnahme: Erst ohne `wmbus_meter`-Block flashen; im Log
+  (`esphome logs wmbus-hkv.yaml`) erscheinen alle Telegramme mit RSSI -> HKV-ID
+  (Hersteller-/Seriennummer, steht auch auf dem Gerät) herausfinden, dann
+  Meter-Block mit ID/Key ergänzen.
+* Kommt nichts an: `irq_pin` zwischen GPIO4 (GDO0) und GPIO2 (GDO2) tauschen,
+  Antenne/Platz prüfen, Verdrahtung gegen das Modul-Pinout (variiert!) prüfen.
+* Syntax der Komponente ändert sich zwischen Versionen – Datei ist eine
+  Vorlage, nicht gegen echte Hardware getestet.
 
 ## Software / Logik
 
