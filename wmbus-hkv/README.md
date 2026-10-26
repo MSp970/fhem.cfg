@@ -36,6 +36,8 @@ Kein Löten. In `wmbusmeters.conf`: `device=/dev/ttyUSB0:im871a:t1`
 
 ### Variante B – DIY: ESP32 + CC1101 (868-MHz-Modul!)
 
+**Schaltplan:** [schaltplan.svg](schaltplan.svg)
+
 ```
         ESP32 DevKit                    CC1101 Modul (868 MHz, 3,3 V!)
      ┌───────────────┐                ┌────────────────┐

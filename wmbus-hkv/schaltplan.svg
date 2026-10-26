@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" font-family="Arial, sans-serif" font-size="14">
+  <rect width="900" height="560" fill="#fff"/>
+  <text x="450" y="30" text-anchor="middle" font-size="20" font-weight="bold">wM-Bus-Empfänger 868 MHz: ESP32 DevKit + CC1101 (3,3 V)</text>
+
+  <!-- ESP32 -->
+  <rect x="60" y="70" width="200" height="400" fill="#eef3fb" stroke="#234" stroke-width="2"/>
+  <text x="160" y="95" text-anchor="middle" font-weight="bold">ESP32 DevKit</text>
+  <g stroke="#222" stroke-width="2" fill="none">
+    <path d="M260 130 H620"/><path d="M260 170 H620"/><path d="M260 210 H620"/>
+    <path d="M260 250 H620"/><path d="M260 290 H620"/><path d="M260 330 H620"/>
+    <path d="M260 370 H620"/><path d="M260 410 H620"/>
+  </g>
+  <g text-anchor="end">
+    <text x="252" y="125">3V3</text><text x="252" y="165">GND</text>
+    <text x="252" y="205">GPIO18 (SCK)</text><text x="252" y="245">GPIO23 (MOSI)</text>
+    <text x="252" y="285">GPIO19 (MISO)</text><text x="252" y="325">GPIO5 (CS)</text>
+    <text x="252" y="365">GPIO4</text><text x="252" y="405">GPIO2</text>
+  </g>
+
+  <!-- CC1101 -->
+  <rect x="620" y="70" width="200" height="400" fill="#fbf3e8" stroke="#432" stroke-width="2"/>
+  <text x="720" y="95" text-anchor="middle" font-weight="bold">CC1101 Modul 868 MHz</text>
+  <g>
+    <text x="628" y="125">VCC</text><text x="628" y="165">GND</text>
+    <text x="628" y="205">SCK</text><text x="628" y="245">SI (MOSI)</text>
+    <text x="628" y="285">SO (MISO)</text><text x="628" y="325">CSN</text>
+    <text x="628" y="365">GDO0 (IRQ)</text><text x="628" y="405">GDO2 (alt. IRQ)</text>
+    <text x="628" y="445">ANT</text>
+  </g>
+
+  <!-- Antenne -->
+  <path d="M820 440 H860 V320" stroke="#222" stroke-width="2" fill="none"/>
+  <path d="M850 320 L860 300 L870 320" stroke="#222" stroke-width="2" fill="none"/>
+  <text x="840" y="270" text-anchor="middle">λ/4-Draht</text>
+  <text x="840" y="286" text-anchor="middle" font-size="12">86 mm</text>
+
+  <!-- Abblock-Kondensatoren zwischen 3V3 (y=130) und GND (y=170) -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <path d="M400 130 V142"/><path d="M400 158 V170"/>
+    <path d="M500 130 V142"/><path d="M500 158 V170"/>
+  </g>
+  <g stroke="#222" stroke-width="3">
+    <path d="M388 142 H412"/><path d="M388 158 H412"/>
+    <path d="M488 142 H512"/><path d="M488 158 H512"/>
+  </g>
+  <circle cx="400" cy="130" r="4"/><circle cx="400" cy="170" r="4"/>
+  <circle cx="500" cy="130" r="4"/><circle cx="500" cy="170" r="4"/>
+  <text x="418" y="154" font-size="12">100 nF</text>
+  <text x="518" y="154" font-size="12">10 µF</text>
+  <!-- Hinweise -->
+  <text x="450" y="55" text-anchor="middle" fill="#a00">CC1101 NICHT an 5 V! Nur 3V3. Kondensatoren direkt am Modul zwischen VCC und GND.</text>
+  <text x="60" y="520" font-size="12">Kondensatoren (100 nF + 10 µF, Elko: + an 3V3) möglichst direkt am CC1101-Modul.</text>
+  <text x="60" y="540" font-size="12">Pinbelegung der CC1101-Platinen variiert: Beschriftung auf dem Modul prüfen.</text>
+</svg>
