@@ -1,518 +1,260 @@
 attr GoodWe_Haus_Ost_Mitte_5876 userReadings \
-Entladeenergie_heute_kWh:.* {
-\
-  my $e = ReadingsNum($name,"Entladeenergie_kWh",0);;
-\
-  my $s = ReadingsNum("Akku_Check","w76_start_out",$e);;
-\
-  sprintf("%.2f",$e - $s)
-\
-},
-\
-
-\
-Batterie_Wirkungsgrad:.* {
-\
-  my $w = ReadingsVal("Akku_Check","w76_wirkungsgrad_30d","");;
-\
-  return $w if($w ne "");;
-\
-  my $i = ReadingsNum($name,"Ladeenergie_kWh",0);;
-\
-  my $o = ReadingsNum($name,"Entladeenergie_kWh",0);;
-\
-  $i >= 1 ? sprintf("%.1f",100 * $o / $i) : 0
-\
-},
-\
-
-\
-Batterie_Verluste_kWh:.* {
-\
-  my $w = ReadingsVal("Akku_Check","w76_verlust_30d_kWh","");;
-\
-  return $w if($w ne "");;
-\
-  sprintf("%.2f",ReadingsNum($name,"Ladeenergie_kWh",0) - ReadingsNum($name,"Entladeenergie_kWh",0))
-\
-},
-\
-
-\
-Batterie_Zyklen:.* {
-\
-  my $c = ReadingsNum("EMS_Control","capacity2",0);;
-\
-  $c > 0 ? sprintf("%.1f",ReadingsNum($name,"E-BatteryDischarge",0) / $c) : 0
-\
-},
-\
-
-\
-Max_Ladeleistung:.* {
-\
-  my $p   = ReadingsNum($name,"Ladeleistung",0);;
-\
-  my $max = ReadingsNum($name,"Max_Ladeleistung",0);;
-\
-  $p > $max ? $p : $max
-\
-},
-\
-
-\
-Max_Entladeleistung:.* {
-\
-  my $p   = ReadingsNum($name,"Entladeleistung",0);;
-\
-  my $max = ReadingsNum($name,"Max_Entladeleistung",0);;
-\
-  $p > $max ? $p : $max
-\
-},
-\
-
-\
-Ladeleistung:.* {
-\
-  my $p = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0);;
-\
-  $p < 0 ? sprintf("%.0f",-$p) : 0
-\
-},
-\
-
-\
-Entladeleistung:.* {
-\
-  my $p = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0);;
-\
-  $p > 0 ? sprintf("%.0f",$p) : 0
-\
-},
-\
-
-\
-Ladeenergie_raw:Power_Battery:.* {
-\
-  my $p = ReadingsNum($name,"Power_Battery",0);;
-\
-  my $t = time();;
-\
-  $defs{$name}{helper}{akl} = {} if(!ref($defs{$name}{helper}{akl}));;
-\
-  my $H  = $defs{$name}{helper}{akl};;
-\
-  my $lp = $H->{p};;
-\
-  my $lt = $H->{t};;
-\
-  $H->{p} = $p;;
-\
-  $H->{t} = $t;;
-\
-  my $v = ReadingsNum($name,"Ladeenergie_raw",0);;
-\
-  if(defined($lt))
-\
-  {
-\
-    my $dt = $t - $lt;;
-\
-    $dt = 1800 if($dt > 1800);;
-\
-    $v += -$lp * $dt if($lp < 0);;
-\
-  }
-\
-  sprintf("%.0f",$v)
-\
-},
-\
-
-\
-Entladeenergie_raw:Power_Battery:.* {
-\
-  my $p = ReadingsNum($name,"Power_Battery",0);;
-\
-  my $t = time();;
-\
-  $defs{$name}{helper}{akd} = {} if(!ref($defs{$name}{helper}{akd}));;
-\
-  my $H  = $defs{$name}{helper}{akd};;
-\
-  my $lp = $H->{p};;
-\
-  my $lt = $H->{t};;
-\
-  $H->{p} = $p;;
-\
-  $H->{t} = $t;;
-\
-  my $v = ReadingsNum($name,"Entladeenergie_raw",0);;
-\
-  if(defined($lt))
-\
-  {
-\
-    my $dt = $t - $lt;;
-\
-    $dt = 1800 if($dt > 1800);;
-\
-    $v += $lp * $dt if($lp > 0);;
-\
-  }
-\
-  sprintf("%.0f",$v)
-\
-},
-\
-
-\
-Ladeenergie_kWh:.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Ladeenergie_raw",0) / 3600000.0)
-\
-},
-\
-
-\
-Entladeenergie_kWh:.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Entladeenergie_raw",0) / 3600000.0)
-\
-},
-\
-
-\
-10_vorh_kWh:.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","SOC",0) / 100 * 9.83)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_Ws:PV_Total_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Erz_PV_DC_Energie_Ws_raw",0))
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_Ws_raw:PV_Total_Power.* integral {
-\
-  ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_day:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawDay",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_hour:statErz_PV_DC_Energie_Ws_rawHour.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawHour",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_month:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawMonth",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_year:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawYear",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_dayLast:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawDayLast",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_monthLast:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawMonthLast",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_kWh_yearLast:statErz_PV_DC_Energie_Ws_rawDay.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawYearLast",0) / 3600000.0)
-\
-},
-\
-
-\
-Erz_PV_DC_Energie_total:PV_Total_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Erz_PV_DC_Energie_Ws_raw",0) / 3600000.0)
-\
-},
-\
-
-\
-Max_Tageswert {
-\
-  (split ' ',ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statPV_Total_PowerDay",0))[5]
-\
-},
-\
-
-\
-PV_Total_Power:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_1_Power",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_2_Power",0))
-\
-},
-\
-
-\
-PV_Goodwe_Total_Power:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Garage_Haus_West_5877","PV_Total_Power",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0))
-\
-},
-\
-
-\
-A9_Erzeugung_gesamt:.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_Feed_E_2_grid",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_Feed_E_2_grid",0))
-\
-},
-\
-
-\
-E_Battery_Charge_Day__Wh:E_Battery_Charge_Day.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","E_Battery_Charge_Day",0) * 1000)
-\
-},
-\
-
-\
-E_Battery_Discharge_Day__Wh:E_Battery_Discharge_Day.* {
-\
-  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","E_Battery_Discharge_Day",0) * 1000)
-\
-},
-\
-
-\
-Power_Battery_i:Power_Battery.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0) * (-1))
-\
-},
-\
-
-\
-PV_Total_Power_i:PV_Total_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0) * (-1))
-\
-},
-\
-
-\
-Aufsum_AC_Total_Power:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Power",0)
-\
-                + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Power",0)
-\
-                + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Power",0))
-\
-},
-\
-
-\
-L1_Current_i:L1_Current.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Current",0) * (-1))
-\
-},
-\
-
-\
-L2_Current_i:L2_Current.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Current",0) * (-1))
-\
-},
-\
-
-\
-L3_Current_i:L3_Current.* {
-\
-  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Current",0) * (-1))
-\
-},
-\
-
-\
-L1_Power_i:L1_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Power",0) * (-1))
-\
-},
-\
-
-\
-L2_Power_i:L2_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Power",0) * (-1))
-\
-},
-\
-
-\
-L3_Power_i:L3_Power.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Power",0) * (-1))
-\
-},
-\
-
-\
-Akku_State {
-\
-  my $val = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Akku_Mode",-1);;
-\
-  return "Akku disconnected"     if($val == 0);;
-\
-  return "Standby"               if($val == 1);;
-\
-  return "Discharging"           if($val == 2);;
-\
-  return "Charging"              if($val == 3);;
-\
-  return "Waiting for charge"    if($val == 4);;
-\
-  return "Waiting for discharge" if($val == 5);;
-\
-  return "Unknown ($val)";;
-\
-},
-\
-
-\
-Total_AC_Power_i:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_AC_Power",0) * (-1))
-\
-},
-\
-
-\
-0_Total_AC_Power:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_AC_Power",0))
-\
-},
-\
-
-\
-0_Power_Battery:.* {
-\
-  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0))
-\
-},
-\
-
-\
-EMSPowerModeText {
-\
-  my $v = ReadingsNum($name,"EMSPowerMode",0);;
-\
-  return $v == 1   ? "Auto" :
-\
-         $v == 2   ? "Laden" :
-\
-         $v == 3   ? "Entladen" :
-\
-         $v == 10  ? "EVU_Punkt_Regelung" :
-\
-         $v == 12  ? "Batt_gezielt_entladen" :
-\
-         $v == 255 ? "offline" : $v;;
-\
-},
-\
-
-\
-EMSPowerMode_Text:(EMSPowerMode|SOC):.* {
-\
-  my %t = (
-\
-    1   => "Auto (Eigenverbrauch)",
-\
-    2   => "PV-Laden (nur PV)",
-\
-    3   => "Entladen mit Watt-Limit, PV deckt Last",
-\
-    4   => "Laden aus Netz mit Watt",
-\
-    5   => "Einspeisen mit Watt",
-\
-    6   => "Halten (kein Laden/Entladen)",
-\
-    7   => "Inselbetrieb",
-\
-    8   => "Batterie-Standby",
-\
-    9   => "Netzbezug auf Watt halten",
-\
-    10  => "Einspeisung auf Watt halten, Batterie gleicht aus",
-\
-    11  => "Zwangsladen mit Watt, PV zuerst, Rest Netz, max Ladestrom_Max",
-\
-    12  => "Zwangsentladen mit Watt",
-\
-    255 => "gestoppt"
-\
-  );;
-\
-  my $m = ReadingsNum($name,"EMSPowerMode",-1);;
-\
-  my $r = $m." ".(exists $t{$m} ? $t{$m} : "unbekannt");;
-\
-  $r .= " [Register nicht lesbar, letzter FHEM-Schreibwert]" if($name eq "GoodWe_Garage_Haus_West_5877");;
-\
-  $r
-\
-},
-\
-
-\
-Ladeenergie_heute_kWh:Power_Battery:.* {
-\
-  my $e = ReadingsNum($name,"Ladeenergie_kWh",0);;
-\
-  my $s = ReadingsNum("Akku_Check","w76_start_in",$e);;
-\
-  sprintf("%.2f",$e - $s)
-\
+Entladeenergie_heute_kWh:.* {\
+  my $e = ReadingsNum($name,"Entladeenergie_kWh",0);;\
+  my $s = ReadingsNum("Akku_Check","w76_start_out",$e);;\
+  sprintf("%.2f",$e - $s)\
+},\
+\
+Batterie_Wirkungsgrad:.* {\
+  my $w = ReadingsVal("Akku_Check","w76_wirkungsgrad_30d","");;\
+  return $w if($w ne "");;\
+  my $i = ReadingsNum($name,"Ladeenergie_kWh",0);;\
+  my $o = ReadingsNum($name,"Entladeenergie_kWh",0);;\
+  $i >= 1 ? sprintf("%.1f",100 * $o / $i) : 0\
+},\
+\
+Batterie_Verluste_kWh:.* {\
+  my $w = ReadingsVal("Akku_Check","w76_verlust_30d_kWh","");;\
+  return $w if($w ne "");;\
+  sprintf("%.2f",ReadingsNum($name,"Ladeenergie_kWh",0) - ReadingsNum($name,"Entladeenergie_kWh",0))\
+},\
+\
+Batterie_Zyklen:.* {\
+  my $c = ReadingsNum("EMS_Control","capacity2",0);;\
+  $c > 0 ? sprintf("%.1f",ReadingsNum($name,"E-BatteryDischarge",0) / $c) : 0\
+},\
+\
+Max_Ladeleistung:.* {\
+  my $p   = ReadingsNum($name,"Ladeleistung",0);;\
+  my $max = ReadingsNum($name,"Max_Ladeleistung",0);;\
+  $p > $max ? $p : $max\
+},\
+\
+Max_Entladeleistung:.* {\
+  my $p   = ReadingsNum($name,"Entladeleistung",0);;\
+  my $max = ReadingsNum($name,"Max_Entladeleistung",0);;\
+  $p > $max ? $p : $max\
+},\
+\
+Ladeleistung:.* {\
+  my $p = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0);;\
+  $p < 0 ? sprintf("%.0f",-$p) : 0\
+},\
+\
+Entladeleistung:.* {\
+  my $p = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0);;\
+  $p > 0 ? sprintf("%.0f",$p) : 0\
+},\
+\
+Ladeenergie_raw:Power_Battery:.* {\
+  my $p = ReadingsNum($name,"Power_Battery",0);;\
+  my $t = time();;\
+  $defs{$name}{helper}{akl} = {} if(!ref($defs{$name}{helper}{akl}));;\
+  my $H  = $defs{$name}{helper}{akl};;\
+  my $lp = $H->{p};;\
+  my $lt = $H->{t};;\
+  $H->{p} = $p;;\
+  $H->{t} = $t;;\
+  my $v = ReadingsNum($name,"Ladeenergie_raw",0);;\
+  if(defined($lt))\
+  {\
+    my $dt = $t - $lt;;\
+    $dt = 1800 if($dt > 1800);;\
+    $v += -$lp * $dt if($lp < 0);;\
+  }\
+  sprintf("%.0f",$v)\
+},\
+\
+Entladeenergie_raw:Power_Battery:.* {\
+  my $p = ReadingsNum($name,"Power_Battery",0);;\
+  my $t = time();;\
+  $defs{$name}{helper}{akd} = {} if(!ref($defs{$name}{helper}{akd}));;\
+  my $H  = $defs{$name}{helper}{akd};;\
+  my $lp = $H->{p};;\
+  my $lt = $H->{t};;\
+  $H->{p} = $p;;\
+  $H->{t} = $t;;\
+  my $v = ReadingsNum($name,"Entladeenergie_raw",0);;\
+  if(defined($lt))\
+  {\
+    my $dt = $t - $lt;;\
+    $dt = 1800 if($dt > 1800);;\
+    $v += $lp * $dt if($lp > 0);;\
+  }\
+  sprintf("%.0f",$v)\
+},\
+\
+Ladeenergie_kWh:.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Ladeenergie_raw",0) / 3600000.0)\
+},\
+\
+Entladeenergie_kWh:.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Entladeenergie_raw",0) / 3600000.0)\
+},\
+\
+10_vorh_kWh:.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","SOC",0) / 100 * 9.83)\
+},\
+\
+Erz_PV_DC_Energie_Ws:PV_Total_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Erz_PV_DC_Energie_Ws_raw",0))\
+},\
+\
+Erz_PV_DC_Energie_Ws_raw:PV_Total_Power.* integral {\
+  ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_day:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawDay",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_hour:statErz_PV_DC_Energie_Ws_rawHour.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawHour",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_month:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawMonth",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_year:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawYear",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_dayLast:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawDayLast",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_monthLast:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawMonthLast",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_kWh_yearLast:statErz_PV_DC_Energie_Ws_rawDay.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statErz_PV_DC_Energie_Ws_rawYearLast",0) / 3600000.0)\
+},\
+\
+Erz_PV_DC_Energie_total:PV_Total_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Erz_PV_DC_Energie_Ws_raw",0) / 3600000.0)\
+},\
+\
+Max_Tageswert {\
+  (split ' ',ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","statPV_Total_PowerDay",0))[5]\
+},\
+\
+PV_Total_Power:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_1_Power",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_2_Power",0))\
+},\
+\
+PV_Goodwe_Total_Power:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Garage_Haus_West_5877","PV_Total_Power",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0))\
+},\
+\
+A9_Erzeugung_gesamt:.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_Feed_E_2_grid",0) + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_Feed_E_2_grid",0))\
+},\
+\
+E_Battery_Charge_Day__Wh:E_Battery_Charge_Day.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","E_Battery_Charge_Day",0) * 1000)\
+},\
+\
+E_Battery_Discharge_Day__Wh:E_Battery_Discharge_Day.* {\
+  sprintf("%.2f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","E_Battery_Discharge_Day",0) * 1000)\
+},\
+\
+Power_Battery_i:Power_Battery.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0) * (-1))\
+},\
+\
+PV_Total_Power_i:PV_Total_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","PV_Total_Power",0) * (-1))\
+},\
+\
+Aufsum_AC_Total_Power:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Power",0)\
+                + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Power",0)\
+                + ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Power",0))\
+},\
+\
+L1_Current_i:L1_Current.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Current",0) * (-1))\
+},\
+\
+L2_Current_i:L2_Current.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Current",0) * (-1))\
+},\
+\
+L3_Current_i:L3_Current.* {\
+  sprintf("%.1f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Current",0) * (-1))\
+},\
+\
+L1_Power_i:L1_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L1_Power",0) * (-1))\
+},\
+\
+L2_Power_i:L2_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L2_Power",0) * (-1))\
+},\
+\
+L3_Power_i:L3_Power.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","L3_Power",0) * (-1))\
+},\
+\
+Akku_State {\
+  my $val = ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Akku_Mode",-1);;\
+  return "Akku disconnected"     if($val == 0);;\
+  return "Standby"               if($val == 1);;\
+  return "Discharging"           if($val == 2);;\
+  return "Charging"              if($val == 3);;\
+  return "Waiting for charge"    if($val == 4);;\
+  return "Waiting for discharge" if($val == 5);;\
+  return "Unknown ($val)";;\
+},\
+\
+Total_AC_Power_i:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_AC_Power",0) * (-1))\
+},\
+\
+0_Total_AC_Power:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Total_AC_Power",0))\
+},\
+\
+0_Power_Battery:.* {\
+  sprintf("%.0f",ReadingsNum("GoodWe_Haus_Ost_Mitte_5876","Power_Battery",0))\
+},\
+\
+EMSPowerModeText {\
+  my $v = ReadingsNum($name,"EMSPowerMode",0);;\
+  return $v == 1   ? "Auto" :\
+         $v == 2   ? "Laden" :\
+         $v == 3   ? "Entladen" :\
+         $v == 10  ? "EVU_Punkt_Regelung" :\
+         $v == 12  ? "Batt_gezielt_entladen" :\
+         $v == 255 ? "offline" : $v;;\
+},\
+\
+EMSPowerMode_Text:(EMSPowerMode|SOC):.* {\
+  my %t = (\
+    1   => "Auto (Eigenverbrauch)",\
+    2   => "PV-Laden (nur PV)",\
+    3   => "Entladen mit Watt-Limit, PV deckt Last",\
+    4   => "Laden aus Netz mit Watt",\
+    5   => "Einspeisen mit Watt",\
+    6   => "Halten (kein Laden/Entladen)",\
+    7   => "Inselbetrieb",\
+    8   => "Batterie-Standby",\
+    9   => "Netzbezug auf Watt halten",\
+    10  => "Einspeisung auf Watt halten, Batterie gleicht aus",\
+    11  => "Zwangsladen mit Watt, PV zuerst, Rest Netz, max Ladestrom_Max",\
+    12  => "Zwangsentladen mit Watt",\
+    255 => "gestoppt"\
+  );;\
+  my $m = ReadingsNum($name,"EMSPowerMode",-1);;\
+  my $r = $m." ".(exists $t{$m} ? $t{$m} : "unbekannt");;\
+  $r .= " [Register nicht lesbar, letzter FHEM-Schreibwert]" if($name eq "GoodWe_Garage_Haus_West_5877");;\
+  $r\
+},\
+\
+Ladeenergie_heute_kWh:Power_Battery:.* {\
+  my $e = ReadingsNum($name,"Ladeenergie_kWh",0);;\
+  my $s = ReadingsNum("Akku_Check","w76_start_in",$e);;\
+  sprintf("%.2f",$e - $s)\
 }
