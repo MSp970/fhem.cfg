@@ -1,0 +1,541 @@
+(
+  [Mythz:Aussentemperatur_sDHW] or
+  [GoodWe:SOC] or
+  [Mythz:Heizanforderung_sControl] or
+  [Mythz:Verdichter_sGlobal] or
+  [+00:00:30]
+)
+(
+{
+  my $DEV = "Heiz_Optimierung_KI";
+  my $now = time();
+  my $sim = ReadingsNum("Heiz_Optimierung_KI","sim_modus",1);
+  my $ueb = ReadingsVal("di_BW_HK_Uebergabe","aktiv","0") eq "1";
+  my $hold = ReadingsNum("Sommerspuelung_alle_HK","spuel_bis",0) > $now
+    || ReadingsVal("Heizventile_Modus","state","Automatik") ne "Automatik";
+
+  my $aussen   = ReadingsNum("Mythz","Aussentemperatur_sDHW",15);
+  my $soc      = ReadingsNum("GoodWe","SOC",50);
+  my $einspeis = ReadingsNum("HA_SDM630M_Nergie","Einspeiseleistung",0);
+  my $einspeis_roh = $einspeis;
+  my $bv = ReadingsVal($DEV,"batt_vorz_check","");
+  my $bsg = $bv =~ /^FALSCH/ ? -1 : 1;
+  my $bat_lad = ($bv =~ /^(ok|FALSCH)/ && ReadingsNum($DEV,"wp_vorrang_batt",1)) ? -1 * $bsg * ReadingsNum("GoodWe","Power_Battery",0) : 0;
+  $bat_lad = 0 if($bat_lad < 0);
+  $einspeis += $bat_lad;
+  fhem("setreading $DEV bat_lad ".int($bat_lad)) if(ReadingsNum($DEV,"bat_lad",-1) != int($bat_lad));
+  my $bezug    = ReadingsNum("HA_SDM630M_Nergie","Bezugsleistung",0);
+  my $verd_an = ReadingsVal("Mythz",
+    "Verdichter_sGlobal","0") eq "1";
+  my $ww_bedarf =
+    ReadingsVal("WW_Bedarf_durch_Waermepumpe_erkannt",
+      "state","off") eq "on"
+    || ReadingsVal("WW_Temperatur_zu_niedrig",
+      "state","off") eq "on";
+
+  my $wp_anforderung = ReadingsNum("Mythz","Heizanforderung_sControl",5);
+  my $wp_modus_txt = "unbekannt";
+  $wp_modus_txt = "Brauchwasser" if($wp_anforderung == 0);
+  $wp_modus_txt = "Heizkreis"    if($wp_anforderung == 2);
+  $wp_modus_txt = "Aus"          if($wp_anforderung == 5);
+  $wp_modus_txt = "Abtauen"      if($wp_anforderung == 6);
+
+  my $war_passiv = ReadingsNum($DEV,"passiv_aktiv",0);
+
+  if($wp_anforderung == 0 || $wp_anforderung == 6)
+  {
+    if(!$war_passiv)
+    {
+      fhem("setreading $DEV save_Bad ".ReadingsVal("Heizventil_Zwangsstellung_Bad","state","off"));
+      fhem("setreading $DEV save_Buero ".ReadingsVal("Heizventil_Zwangsstellung_Buero","state","off"));
+      fhem("setreading $DEV save_Flur_EG ".ReadingsVal("Heizventil_Zwangsstellung_Flur_EG","state","off"));
+      fhem("setreading $DEV save_Flur_Keller ".ReadingsVal("Heizventil_Zwangsstellung_Flur_Keller","state","off"));
+      fhem("setreading $DEV save_Flur_OG ".ReadingsVal("Heizventil_Zwangsstellung_Flur_OG","state","off"));
+      fhem("setreading $DEV save_Gaeste_WC ".ReadingsVal("Heizventil_Zwangsstellung_Gaeste_WC","state","off"));
+      fhem("setreading $DEV save_Garderobe ".ReadingsVal("Heizventil_Zwangsstellung_Garderobe","state","off"));
+      fhem("setreading $DEV save_Hobby ".ReadingsVal("Heizventil_Zwangsstellung_Hobby","state","off"));
+      fhem("setreading $DEV save_Kueche ".ReadingsVal("Heizventil_Zwangsstellung_Kueche","state","off"));
+      fhem("setreading $DEV save_Lara ".ReadingsVal("Heizventil_Zwangsstellung_Lara","state","off"));
+      fhem("setreading $DEV save_SZ ".ReadingsVal("Heizventil_Zwangsstellung_SZ","state","off"));
+      fhem("setreading $DEV save_Tobias ".ReadingsVal("Heizventil_Zwangsstellung_Tobias","state","off"));
+      fhem("setreading $DEV save_WZ ".ReadingsVal("Heizventil_Zwangsstellung_WZ","state","off"));
+      fhem("setreading $DEV save_global ".ReadingsVal("Heizventile_Zwangsstellung","state","off"));
+      fhem("setreading $DEV hk_saved 1");
+    }
+    fhem("setreading $DEV passiv_aktiv 1");
+    fhem("setreading $DEV wp_modus $wp_modus_txt");
+    fhem("setreading $DEV freigabe_grund passiv_".$wp_modus_txt);
+    return;
+  }
+
+  if($war_passiv)
+  {
+    my $hk_saved = ReadingsNum($DEV,"hk_saved",0);
+    fhem("setreading $DEV hk_saved 0") if($hk_saved);
+    fhem("setreading $DEV passiv_aktiv 0");
+    fhem("setreading $DEV passiv_ende ".int($now));
+  }
+  fhem("setreading $DEV wp_modus $wp_modus_txt");
+
+  my $nacht_bedarf = ReadingsNum("DOIF_PV_forecast_Batterie_laden","nacht_verbrauch_forecast_kwh",10);
+  my $pv_forecast  = ReadingsNum("DOIF_PV_forecast_Batterie_laden","forecast_today_kwh",15);
+
+  my $w_temp     = ReadingsNum($DEV,"gewicht_temp",2.0);
+  my $w_nacht    = ReadingsNum($DEV,"gewicht_nacht",1.5);
+  my $w_pvprog   = ReadingsNum($DEV,"gewicht_pvprog",0.66);
+  my $temp_basis = ReadingsNum($DEV,"temp_basis",15);
+
+  my $SCHWELLE_PV   = ReadingsNum($DEV,"schwelle_pv",15);
+  my $SCHWELLE_BATT = ReadingsNum($DEV,"schwelle_batt",35);
+  my $SCHWELLE_NETZ = ReadingsNum($DEV,"schwelle_netz",60);
+
+  my $batt_kwh = ReadingsNum($DEV,"batterie_kwh",16);
+
+  my $EIN_W     = ReadingsNum($DEV,"einspeis_ein_w",1200);
+  my $AUS_W     = ReadingsNum($DEV,"einspeis_aus_w",600);
+  my $MIN_LAUF  = ReadingsNum($DEV,"min_laufzeit_s",900);
+  my $MIN_PAUSE = ReadingsNum($DEV,"min_pause_s",600);
+
+  my $hyst = ReadingsNum($DEV,"hysterese",0.3);
+
+  my $idx_temp = ($temp_basis - $aussen) * $w_temp;
+  $idx_temp = 0 if($idx_temp < 0);
+  $idx_temp = 50 if($idx_temp > 50);
+
+  my $idx_nacht = $nacht_bedarf * $w_nacht;
+  $idx_nacht = 30 if($idx_nacht > 30);
+
+  my $idx_pvprog = 20 - ($pv_forecast * $w_pvprog);
+  $idx_pvprog = 0 if($idx_pvprog < 0);
+  $idx_pvprog = 20 if($idx_pvprog > 20);
+
+  my $index = $idx_temp + $idx_nacht + $idx_pvprog;
+  $index = 100 if($index > 100);
+  $index = int($index + 0.5);
+
+  my $soc_reserve_noetig = $nacht_bedarf * 100 / $batt_kwh;
+  $soc_reserve_noetig = 90 if($soc_reserve_noetig > 90);
+  my $soc_frei = $soc - $soc_reserve_noetig;
+
+  my $quelle = "keine";
+  my $heiz_voraus = 0;
+
+my $hv_alt = ReadingsNum($DEV,"heiz_voraus",0);
+my $WP_EIN_W = ReadingsNum($DEV,"wp_lauf_ein_w",100);
+my $WP_BEZUG_MAX = ReadingsNum($DEV,"wp_lauf_bezug_max_w",100);
+my $WP_BEZUG_S = ReadingsNum($DEV,"wp_lauf_bezug_s",120);
+my $bz_seit = ReadingsNum($DEV,"bezug_seit",0);
+if($bezug > $WP_BEZUG_MAX)
+{
+if(!$bz_seit)
+{
+$bz_seit = int($now);
+fhem("setreading $DEV bezug_seit $bz_seit");
+}
+}
+elsif($bz_seit)
+{
+$bz_seit = 0;
+fhem("setreading $DEV bezug_seit 0");
+}
+my $bezug_lang = ($bz_seit && ($now - $bz_seit) >= $WP_BEZUG_S) ? 1 : 0;
+fhem("setreading $DEV bezug_lang $bezug_lang");
+my $pv_ein;
+my $defizit_lang = 0;
+if($verd_an)
+{
+my $p_wp = ReadingsNum("HA_SDM630M_Heatpump","Power_Sum__W",0);
+my $p_bat = ReadingsNum("GoodWe","Power_Battery",0);
+my $ub_wp = $einspeis_roh - $bezug + $p_wp - $bsg * $p_bat;
+my $df_s = ReadingsNum($DEV,"pv_defizit_seit",0);
+my $wb_soc = ReadingsNum("GoodWe","SOC",0);
+my $wb_kap = ReadingsNum($DEV,"wp_batt_kap_wh",ReadingsNum("EMS_Control","capacity1",10) * 1000);
+my $wb_res = ReadingsNum("DOIF_GoodWe_v2","nacht_defizit_wh",(ReadingsVal("DOIF_GoodWe_v2","zustand_grund","") =~ /Res (\d+)/) ? $1 : 2000);
+my $wb_frei = int(($wb_soc - ReadingsNum("EMS_Control","socMin",3)) / 100 * $wb_kap - $wb_res);
+my $wb_dfz = $p_wp - $ub_wp;
+my $batt_hilfe = ($p_wp >= 300 && $wb_soc >= ReadingsNum($DEV,"wp_batt_soc_min",50) && $wb_dfz <= ReadingsNum($DEV,"wp_batt_max_w",1000) && $wb_frei >= $wb_dfz * ReadingsNum($DEV,"wp_batt_h",1)) ? 1 : 0;
+fhem("setreading $DEV wp_batt_hilfe $batt_hilfe") if(ReadingsNum($DEV,"wp_batt_hilfe",-1) != $batt_hilfe);
+fhem("setreading $DEV wp_batt_frei_wh $wb_frei") if(abs(ReadingsNum($DEV,"wp_batt_frei_wh",-99999) - $wb_frei) >= 50);
+if($p_wp >= 300 && $ub_wp < $p_wp - $WP_BEZUG_MAX && !$batt_hilfe) { if(!$df_s) { $df_s = int($now); fhem("setreading $DEV pv_defizit_seit $df_s"); } }
+elsif($df_s) { $df_s = 0; fhem("setreading $DEV pv_defizit_seit 0"); }
+$defizit_lang = ($df_s && ($now - $df_s) >= $WP_BEZUG_S) ? 1 : 0;
+fhem("setreading $DEV wp_leistung ".int($p_wp)) if(ReadingsNum($DEV,"wp_leistung",-1) != int($p_wp));
+fhem("setreading $DEV pv_ueber_ohne_wp ".int($ub_wp)) if(ReadingsNum($DEV,"pv_ueber_ohne_wp",-99999) != int($ub_wp));
+$pv_ein = $hv_alt ? (!$bezug_lang && !$defizit_lang) : ($p_wp >= 300 ? !$defizit_lang : ($einspeis >= $WP_EIN_W));
+}
+else
+{
+$pv_ein = $hv_alt ? ($einspeis >= $AUS_W) : ($einspeis >= $EIN_W);
+}
+
+if($pv_ein)
+  {
+    if($index >= $SCHWELLE_PV)
+    {
+      $quelle = "PV";
+      $heiz_voraus = 1;
+    }
+  }
+  elsif($soc_frei > 0 && $index >= $SCHWELLE_BATT && ReadingsNum("DOIF_GoodWe_v2","nacht_aktiv",0) != 1)
+  {
+    $quelle = "Batterie";
+    $heiz_voraus = 1;
+  }
+  elsif($index >= $SCHWELLE_NETZ)
+  {
+    $quelle = "Netz";
+    $heiz_voraus = 1;
+  }
+
+my $HV_HOLD = ReadingsNum($DEV,"heiz_voraus_min_s",600);
+my $hv_t = ReadingsNum($DEV,"heiz_voraus_t",0);
+if($heiz_voraus != $hv_alt)
+{
+if(($now - $hv_t) < $HV_HOLD)
+{
+$heiz_voraus = $hv_alt;
+$quelle = ReadingsVal($DEV,"quelle","keine");
+}
+else
+{
+fhem("setreading $DEV heiz_voraus_t ".int($now));
+}
+}
+  my $akzept_netz = 0;
+  if($index >= $SCHWELLE_NETZ)
+  {
+    $akzept_netz = ($index - $SCHWELLE_NETZ) / (100 - $SCHWELLE_NETZ) * 1500;
+    $akzept_netz = int($akzept_netz);
+  }
+
+  my @raeume = (
+    "Buero;Buero_Ist_Temperatur;Buerotemperatur1;21;24;3",
+    "Hobby;Hobby_Ist_Temperatur;Hobbytemperatur1;20;23;3",
+    "WZ;WZ_Ist_Temperatur;WZtemperatur1;22;23;1",
+    "SZ;SZ_Ist_Temperatur;SZtemperatur1;19;20;1",
+    "Bad;Bad_Ist_Temperatur;Badtemperatur1;23;24;1",
+    "Kueche;Kueche_Ist_Temperatur;Kuechetemperatur1;21;22;2",
+    "Lara;Lara_Ist_Temperatur;Laratemperatur1;21;22;2",
+    "Tobias;Tobias_Ist_Temperatur;Tobiastemperatur1;21;22;2",
+    "Flur_EG;FlurEG_Ist_Temperatur;FlurEGtemperatur1;19;21;2",
+    "Flur_OG;Flur_OG_Ist_Temperatur;Flur_OGtemperatur1;19;21;2",
+    "Gaeste_WC;GaesteWC_Ist_Temperatur;GaesteWCtemperatur1;20;21;1"
+  );
+
+  my @folge_raeume = (
+    "Garderobe;Flur_EG",
+    "Flur_Keller;Buero"
+  );
+
+  my $sperre_off = ReadingsVal("WP_Verdichter_Sperre","state","on") eq "off";
+  my $sperre_bald = (!$sperre_off && ReadingsVal("Master_Verdichtersperre","state","on") ne "on" && ReadingsVal("di_Verdichtersperre","grund","") =~ /^(wiedereinschaltsperre|warte_ventile)$/ && ReadingsNum("di_Verdichtersperre","rest_sperre_min",99) <= ReadingsNum($DEV,"ventil_vorlauf_min",5)) ? 1 : 0;
+  fhem("setreading $DEV sperre_bald $sperre_bald") if(ReadingsNum($DEV,"sperre_bald",-1) != $sperre_bald);
+  my $hk_fr_ok = (ReadingsNum($DEV,"freigabe_state",0) == 1 && $sperre_off && ReadingsVal("Mythz","Jahreszeitmodus_sHC1","winter") ne "summer" && ReadingsVal("Sommerbetrieb_THZ","state","off") ne "on") ? 1 : 0; my $hk_t = time(); my $hk_ws = ReadingsNum($DEV,"hk_wart_seit",0); my $hk_pb = ReadingsNum($DEV,"hk_wart_pause_bis",0); if($verd_an || !$hk_fr_ok) { $hk_ws = 0; $hk_pb = 0 if $verd_an; } elsif($hk_t < $hk_pb) { $hk_fr_ok = 0; } else { $hk_ws = $hk_t if !$hk_ws; if($hk_t - $hk_ws > ReadingsNum($DEV,"hk_wart_max_s",1800)) { $hk_pb = $hk_t + ReadingsNum($DEV,"hk_wart_pause_s",3600); $hk_ws = 0; $hk_fr_ok = 0; } } fhem("setreading $DEV hk_wart_seit $hk_ws") if $hk_ws != ReadingsNum($DEV,"hk_wart_seit",0); fhem("setreading $DEV hk_wart_pause_bis $hk_pb") if $hk_pb != ReadingsNum($DEV,"hk_wart_pause_bis",0);
+  $hk_fr_ok = 1 if(!$hk_fr_ok && $sperre_bald && ReadingsNum($DEV,"freigabe_state",0) == 1 && ReadingsVal("Mythz","Jahreszeitmodus_sHC1","winter") ne "summer" && ReadingsVal("Sommerbetrieb_THZ","state","off") ne "on");
+  my $hk_moeglich = $verd_an || $ueb || $hk_fr_ok;
+  my %ventil_entsch = ();
+  my %luecke = ();
+  my $df_liste = ReadingsVal($DEV,"durchfluss_raeume","-");
+  my $df_modus = (($hk_moeglich || $sperre_bald || ReadingsVal("di_Verdichtersperre","grund","") eq "warte_ventile") && !$ueb && ReadingsVal("Sommerbetrieb_THZ","state","off") ne "on" && ReadingsVal("Mythz","Pumpe_Brauchwasser_sGlobal","0") ne "1") ? 1 : 0;
+
+  my $komfort_bedarf = 0; my $komfort_n = 0; my %fenster_auf; my $nacht_k = (ReadingsNum("DOIF_GoodWe_v2","nacht_aktiv",0) == 1);
+  my $vorauslade_bedarf = 0;
+  my $pv_raum_bedarf = 0;
+  my $fr_vor = ReadingsNum($DEV,"freigabe_state",0);
+
+  my $PV_MIN  = ReadingsNum($DEV,"pv_min_w",2500);
+  my $PV_PLUS = ReadingsNum($DEV,"pv_lauf_plus_k",1);
+  my $pv_roh = ReadingsNum("HA_SDM630M_Nergie","PV_Leistung_total",0) >= $PV_MIN; my $pv_t = ReadingsNum($DEV,"pv_ok_t",0); if($pv_roh && ($now - $pv_t) >= 60) { $pv_t = int($now); fhem("setreading $DEV pv_ok_t $pv_t"); } my $lade_w = ReadingsNum("GoodWe","Ladeleistung",0); $lade_w = 0 if($lade_w < 0); my $pv_ok = ($pv_roh || (!$verd_an && $einspeis >= $PV_MIN) || ($verd_an && ($einspeis >= $WP_EIN_W || (!$bezug_lang && $soc_frei > 0 && $index >= $SCHWELLE_BATT && ReadingsNum("DOIF_GoodWe_v2","nacht_aktiv",0) != 1) || ($now - $pv_t) < ReadingsNum($DEV,"pv_ok_halte_s",900)))) ? 1 : 0;
+  my $pv_dfs = ReadingsNum($DEV,"pv_defizit_seit",0);
+  my $pv_viel = $verd_an ? ReadingsNum($DEV,"pv_viel",0) : 0; my $pvv_t = $verd_an ? ReadingsNum($DEV,"pv_viel_t",0) : 0; my $pvv_w = $pv_viel ? ($einspeis_roh < ReadingsNum($DEV,"pv_max_aus_w",500))   : ($einspeis_roh >= ReadingsNum($DEV,"pv_max_ein_w",1500)); if(!$verd_an || !$pvv_w) { $pvv_t = 0 } elsif(!$pvv_t) { $pvv_t = $now } elsif($now - $pvv_t >= ReadingsNum($DEV,"pv_max_halte_s",600))   { $pv_viel = 1 - $pv_viel; $pvv_t = 0 } fhem("setreading $DEV pv_viel $pv_viel") if(ReadingsNum($DEV,"pv_viel",-1) != $pv_viel); fhem("setreading $DEV pv_viel_t $pvv_t") if(ReadingsNum($DEV,"pv_viel_t",-1) != $pvv_t); fhem("setreading $DEV pv_viel_tag ".substr(TimeNow(),0,10))   if($pv_viel && ReadingsVal($DEV,"pv_viel_tag","") ne substr(TimeNow(),0,10));
+my $pv_ok_deckung = ($verd_an && ReadingsNum($DEV,"wp_leistung",0) >= 300 && (!$pv_dfs || time() - $pv_dfs < ReadingsNum($DEV,"wp_lauf_bezug_s",120))) ? 1 : 0;
+  $pv_ok = 1 if($pv_ok_deckung);
+  fhem("setreading $DEV pv_ok_deckung $pv_ok_deckung") if(ReadingsNum($DEV,"pv_ok_deckung",-1) != $pv_ok_deckung);
+
+  my $ofen = ReadingsNum("di_Kachelofen","aktiv",0) == 1;
+  my %ofr = map { $_ => 1 } split(",",ReadingsVal($DEV,"ofen_raeume","WZ"));
+  fhem("setreading $DEV kachelofen ".($ofen ? 1 : 0));
+  foreach my $r (@raeume)
+  {
+    my ($name,$sd,$sr,$d_soll,$d_max,$d_prio) = split(";",$r);
+    my $ist = ReadingsNum($sd,$sr,$d_soll);
+
+    my $ss = $sr; $ss =~ s/temperatur1$/solltemperatur1/; my $knxs = ReadingsNum($sd,$ss,0); $d_soll = $knxs if($ss ne $sr && $knxs >= 5 && $knxs <= 30); my $soll = ReadingsNum($DEV,"raum_".$name."_soll",$d_soll);
+    fhem("setreading $DEV raum_".$name."_soll_eff $soll") if(ReadingsVal($DEV,"raum_".$name."_soll_eff","") ne $soll);
+    my $maxvoraus = ReadingsNum($DEV,"raum_".$name."_maxvoraus",$d_max);
+    my $prio = ReadingsNum($DEV,"raum_".$name."_prio",$d_prio);
+    my $band = $aussen < 0 ? 0 : $aussen < 8 ? 1 : $aussen < 15 ? 2 : 3;
+    my $res = ReadingsNum($DEV,"raum_".$name."_res_b".$band,
+      ReadingsNum($DEV,"raum_".$name."_reserve",0));
+    my $ofen_r = $ofen && $ofr{$name};
+    (my $ksr = $sr) =~ s/temperatur1$/solltemperatur1/;
+    my $ksoll = ReadingsNum($sd,$ksr,$soll);
+    my $pvcap = ReadingsNum($DEV,"raum_".$name."_maxpv",$maxvoraus + $PV_PLUS);
+    my $nta = ReadingsNum($DEV,"nacht_ta_letzt",10);
+    my $nb = $nta < 0 ? 0 : $nta < 8 ? 1 : $nta < 15 ? 2 : 3;
+    my $nd = ReadingsNum($DEV,"raum_".$name."_nd_b".$nb,ReadingsNum($DEV,"raum_".$name."_nd",0.5));
+    my $pvziel = $ksoll + ReadingsNum($DEV,"raum_".$name."_pvplus",1) + ReadingsNum($DEV,"pv_vorrat_naechte",2) * $nd;
+    my $zw = ReadingsNum($DEV,"raum_".$name."_zuab_min",0); $pvziel = $zw + $res if($zw > 0 && $pvziel < $zw + $res);
+    $pvziel = $pvcap if($pvziel > $pvcap);
+    $pvziel = 0 if($pvcap <= 0);
+    $pvziel = sprintf("%.1f",$pvziel);
+    fhem("setreading $DEV raum_".$name."_pvziel $pvziel") if(ReadingsNum($DEV,"raum_".$name."_pvziel",-1) != $pvziel);
+
+    my $ventil = "off";
+    my $grund  = "kein_bedarf"; my $nl_k = ReadingsNum($DEV,"raum_".$name."_nl_n",0) >= ReadingsNum($DEV,"nl_min_n",2)   ? ReadingsNum($DEV,"raum_".$name."_nl",0) : 0; $nl_k = ReadingsNum($DEV,"nl_max_k",1) if($nl_k > ReadingsNum($DEV,"nl_max_k",1)); $nl_k = 0 if($nl_k < 0);
+
+    my %fk=(Bad=>"Bad_Fenster",Gaeste_WC=>"GaesteWC_Fenster",Kueche=>"Kueche_Ess_WZ_Fenster",WZ=>"Kueche_Ess_WZ_Fenster",Lara=>"Lara_Fenster",SZ=>"SZ_Fenster",Tobias=>"Tobias_Fenster",Hobby=>"Keller_Fenster"); my $ask_sp = ReadingsNum($DEV,"auskuehl_sperre_min",60)*60; my $fdev = $fk{$name}; if($fdev && ReadingsVal($fdev,"state","closed") ne "closed") { fhem("setreading $DEV raum_".$name."_auskuehl_bis ".int($now+$ask_sp)); } my $rt = ReadingsNum($DEV,"raum_".$name."_ref_t",0); if($now - $rt >= 900) { my $rv = ReadingsNum($DEV,"raum_".$name."_ref_ist",$ist); if($rt > 0 && $rv - $ist >= ReadingsNum($DEV,"auskuehl_k",0.4)) { fhem("setreading $DEV raum_".$name."_auskuehl_bis ".int($now+$ask_sp)); } fhem("setreading $DEV raum_".$name."_ref_ist $ist"); fhem("setreading $DEV raum_".$name."_ref_t ".int($now)); } my $auskuehl = ReadingsNum($DEV,"raum_".$name."_auskuehl_bis",0) > $now; if($ofen_r && ($name eq "WZ" || $ist >= $soll - ReadingsNum($DEV,"ofen_untergrenze_k",1)))
+    {
+      $ventil = "off";
+      $grund = "kachelofen";
+    }
+    elsif($ist < ($soll - $hyst) || (ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off") eq "on" && ReadingsVal($DEV,"raum_".$name."_grund","") =~ /^komfort/ && $ist < $soll + ReadingsNum($DEV,"komfort_ueber_k",0)))
+    {
+      $ventil = (ReadingsVal("Sommerbetrieb_THZ","state","off") eq "on" ? "off" : "on");
+      $grund = $auskuehl ? "komfort_auskuehlung" : "komfort";
+      if(!$auskuehl) { $komfort_bedarf = 1; $komfort_n++; }
+    }
+    elsif($heiz_voraus && $ist < $maxvoraus - $res)
+    {
+      $ventil = $hk_moeglich ? "on" : "off";
+      $grund = $hk_moeglich ? "vorausladen" : "vorausladen_wartet";
+      $vorauslade_bedarf = 1;
+    }
+    elsif($hk_moeglich && $pv_ok && !ReadingsNum($DEV,"raum_".$name."_pv_aus",0) && ($ist < $pvziel - $res - $nl_k || ($verd_an && $pv_viel && $ist < $pvcap - $nl_k - (ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off") eq "on" ? 0 : ReadingsNum($DEV,"pv_max_hyst_k",0.2)))))
+    {
+      $ventil = "on";
+      $grund = ($ist < $pvziel - $res - $nl_k) ? "pv_lauf" : "pv_max";
+    }
+
+    if($verd_an && ReadingsVal("Mythz","Pumpe_Brauchwasser_sGlobal","0") ne "1" && $name eq "Buero" && $ventil eq "off" && ReadingsNum($DEV,"buero_immer_offen",0))
+    {
+      $ventil = "on";
+      $grund = "durchfluss_schutz";
+    }
+    $pv_raum_bedarf = 1 if(!$ofen_r && $pv_ok && !ReadingsNum($DEV,"raum_".$name."_pv_aus",0) && ($ist < $pvziel - $res - $nl_k || ($verd_an && $pv_viel && $ist < $pvcap - $nl_k)));
+    if($df_modus && $ventil eq "off" && !$ofen_r && ",$df_liste," =~ /,$name,/) { $ventil = "on"; $grund = "durchfluss_min"; }
+    if($ventil eq "off" && !$ofen_r && $verd_an && ReadingsVal("Mythz","Pumpe_Brauchwasser_sGlobal","0") ne "1" && ReadingsVal("Sommerbetrieb_THZ","state","off") ne "on") { my $vk = ($name eq "Hobby") ? "Hobbykeller" : $name; my $vp = ReadingsNum("Heizventilstellungen",$vk."-get",0); my $zon = ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off") eq "on"; if((($vp > 0 && $vp <= ReadingsNum($DEV,"puls_max_pct",20)) || ($zon && ReadingsVal($DEV,"raum_".$name."_grund","") eq "knx_puls")) && $ist < $soll + ReadingsNum($DEV,"puls_bis_k",0.3)) { $ventil = "on"; $grund = "knx_puls"; } } if($ventil eq "off" && !$ofen_r && $verd_an && ReadingsVal("Mythz","Pumpe_Brauchwasser_sGlobal","0") ne "1" && ReadingsNum($DEV,"komfort_bedarf",0) == 1 && ReadingsNum("Mythz","Vorlauftemperatur_sGlobal",0) >= ReadingsNum($DEV,"vl_ziel",99) - ReadingsNum($DEV,"entlast_vor_k",1) && !ReadingsNum($DEV,"raum_".$name."_pv_aus",0) && $ist < $pvziel) { $ventil = "on"; $grund = "vl_entlastung"; } my $spar = (!$pv_ok && ($soc_frei <= ReadingsNum($DEV,"spar_soc_frei",5) || $bezug_lang)) ? 1 : 0; if($spar && $ventil eq "on" && $grund !~ /^durchfluss/ && index(",".ReadingsVal($DEV,"spar_raeume","Hobby,Flur_EG,Flur_Keller").",", ",".$name.",") >= 0) { if($grund =~ /^komfort/) { $komfort_n-- if($komfort_n > 0); $komfort_bedarf = ($komfort_n > 0) ? 1 : 0; } $ventil = "off"; $grund = "spar_netz"; } my $fz = ReadingsNum($DEV,"raum_".$name."_fenster_zu",0); my $fo = ($fdev && ReadingsVal($fdev,"state","closed") ne "closed") ? 1 : 0; my $cd = "Heizventil_schliessen_".$name; if($fo) { $ventil = "off"; $grund = "fenster_offen"; $fenster_auf{$name} = 1; if($defs{$cd} && !$fz && !$sim) { fhem("set $cd on"); fhem("setreading $DEV raum_".$name."_fenster_zu 1"); } } elsif($fz) { fhem("set $cd off") if($defs{$cd} && !$sim); fhem("setreading $DEV raum_".$name."_fenster_zu 0"); } $luecke{$name} = $ist - $soll unless($ofen_r); delete $luecke{$name} if($fenster_auf{$name});
+    $ventil_entsch{$name} = $ventil;
+
+    { my $nlp = "raum_".$name."_nl"; my $v_alt = ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off"); my $nls = ReadingsVal($DEV,$nlp."_start",""); if($nls eq "") {   fhem("setreading $DEV ".$nlp."_start ".int($now)."_".sprintf("%.2f_%.2f",$ist,$ist))     if(!$ofen_r && !$sim && !$ueb && !$hold && $v_alt eq "on" && $ventil eq "off"     && ReadingsVal($DEV,"raum_".$name."_grund","") =~ /^pv_(lauf|max)$/); } else {   my ($t0,$i0,$mx) = split(/_/,$nls);   if($ofen_r || $sim || $hold || $ventil eq "on" || !$t0) {     fhem("deletereading $DEV ".$nlp."_start");   }   elsif($now - $t0 >= ReadingsNum($DEV,"nl_fenster_s",7200)) {     my $d = $mx - $i0; $d = 0 if($d < 0); $d = 2 if($d > 2);     my $n = ReadingsNum($DEV,$nlp."_n",0); my $alt = ReadingsNum($DEV,$nlp,0);     my $neu = $n ? $alt + ReadingsNum($DEV,"nl_alpha",0.3) * ($d - $alt) : $d;     fhem("setreading $DEV $nlp ".sprintf("%.2f",$neu));     fhem("setreading $DEV ".$nlp."_n ".($n + 1));     fhem("setreading $DEV ".$nlp."_letzt ".sprintf("%.2f",$d));     fhem("deletereading $DEV ".$nlp."_start");   }   elsif($ist >= $mx + 0.05) {     fhem("setreading $DEV ".$nlp."_start ".$t0."_".$i0."_".sprintf("%.2f",$ist));   } } }
+my $ventil_ist = ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off");
+    if($ventil ne $ventil_ist && !$sim && !$ueb && !$hold)
+    {
+      fhem("set Heizventil_Zwangsstellung_".$name." ".$ventil);
+    }
+
+    fhem("setreading $DEV raum_".$name."_ist ".sprintf("%.1f",$ist));
+    fhem("setreading $DEV raum_".$name."_ventil $ventil");
+    fhem("setreading $DEV raum_".$name."_grund $grund");
+    my $zu = $grund eq "komfort" ? $soll + ReadingsNum($DEV,"komfort_ueber_k",0) : $grund =~ /^vorausladen/ ? $maxvoraus - $res : $grund eq "pv_lauf" ? $pvziel - $res : $grund eq "pv_max" ? $pvcap : ""; my ($zb,$zv)=($soll - $hyst,"komfort"); if($heiz_voraus && $maxvoraus - $res > $zb){$zb=$maxvoraus - $res; $zv="voraus"} if($hk_moeglich && $pv_ok){my $zp=$pvziel - $res - $nl_k; if($zp > $zb){$zb=$zp; $zv="pv"} if($verd_an && $pv_viel){my $zm=$pvcap - $nl_k - (ReadingsVal("Heizventil_Zwangsstellung_".$name,"state","off") eq "on" ? 0 : ReadingsNum($DEV,"pv_max_hyst_k",0.2)); if($zm > $zb){$zb=$zm; $zv="pvmax"}}} if($ventil eq "on"){$zu=$zb} else {$zv="-"} fhem("setreading $DEV raum_".$name."_zu_ab_von $zv") if(ReadingsVal($DEV,"raum_".$name."_zu_ab_von","") ne $zv); $zu = $zu eq "" ? "-" : sprintf("%.1f",$zu); fhem("setreading $DEV raum_".$name."_zu_ab $zu") if(ReadingsVal($DEV,"raum_".$name."_zu_ab","") ne $zu);
+  }
+
+  my $MIN_HK = ReadingsNum($DEV,"min_offene_hk",3);
+  my $neu_df = ""; foreach my $n (qw(Gaeste_WC Flur_OG)) { next if($fenster_auf{$n}); next if(!$df_modus || !exists $ventil_entsch{$n}); if($ventil_entsch{$n} eq "off") { $neu_df .= ($neu_df eq "" ? "" : ",").$n; fhem("set Heizventil_Zwangsstellung_".$n." on") if(ReadingsVal("Heizventil_Zwangsstellung_".$n,"state","off") ne "on" && !$sim && !$hold); $ventil_entsch{$n} = "on"; fhem("setreading $DEV raum_".$n."_ventil on"); fhem("setreading $DEV raum_".$n."_grund durchfluss_min"); } }
+  if($df_modus)
+  {
+    my $basis = 0;
+    foreach my $n (keys %ventil_entsch) { $basis++ if($ventil_entsch{$n} eq "on" && ReadingsVal($DEV,"raum_".$n."_grund","") ne "durchfluss_min"); }
+    my $fehlt = $MIN_HK - $basis;
+    if($fehlt > 0)
+    {
+      my @kand = sort { $luecke{$a} <=> $luecke{$b} } grep { $ventil_entsch{$_} eq "off" || ReadingsVal($DEV,"raum_".$_."_grund","") eq "durchfluss_min" } keys %luecke;
+      splice(@kand,$fehlt) if(@kand > $fehlt);
+      $neu_df = join(",",@kand);
+      foreach my $n (@kand)
+      {
+        fhem("set Heizventil_Zwangsstellung_".$n." on") if(ReadingsVal("Heizventil_Zwangsstellung_".$n,"state","off") ne "on" && !$sim && !$hold);
+        $ventil_entsch{$n} = "on";
+        fhem("setreading $DEV raum_".$n."_ventil on");
+        fhem("setreading $DEV raum_".$n."_grund durchfluss_min");
+      }
+    }
+  }
+  $neu_df = "-" if($neu_df eq "");
+  fhem("setreading $DEV durchfluss_raeume $neu_df") if(ReadingsVal($DEV,"durchfluss_raeume","") ne $neu_df);
+  foreach my $f (@folge_raeume)
+  {
+    my ($fname,$leit) = split(";",$f);
+    my $fventil = $ventil_entsch{$leit};
+    $fventil = "off" if(!defined($fventil));
+    my $fist = ReadingsVal("Heizventil_Zwangsstellung_".$fname,"state","off");
+    if($fventil ne $fist && !$sim && !$ueb && !$hold)
+    {
+      fhem("set Heizventil_Zwangsstellung_".$fname." ".$fventil);
+    }
+    fhem("setreading $DEV raum_".$fname."_ventil $fventil");
+    fhem("setreading $DEV raum_".$fname."_grund folgt_".$leit);
+  }
+
+  my $glob_zwang = ReadingsVal("Heizventile_Zwangsstellung","state","off");
+  if($glob_zwang ne "on" && !$sim && !$hold)
+  {
+    fhem("set Heizventile_Zwangsstellung on");
+  }
+
+  my $fr_state  = ReadingsNum($DEV,"freigabe_state",0);
+  my $last_on   = ReadingsNum($DEV,"freigabe_last_on",0);
+  my $last_off  = ReadingsNum($DEV,"freigabe_last_off",0);
+
+  my $runtime = ($fr_state == 1 && $last_on  > 0) ? ($now - $last_on)  : 0;
+  my $offtime = ($fr_state == 0 && $last_off > 0) ? ($now - $last_off) : ($MIN_PAUSE + 1);
+my $K_OFF = ReadingsNum($DEV,"komfort_vl_offset_k",6);
+my $K_MINLAUF = ReadingsNum($DEV,"komfort_min_lauf_s",600);
+my $K_PAUSE = ReadingsNum($DEV,"komfort_pause_s",2700);
+my $K_HALT = ReadingsNum($DEV,"komfort_vl_halte_s",60);
+my $vl_soll = ReadingsNum("Mythz","Heizkreis_Solltemperatur_sHC1",0);
+my $vl_ist = ReadingsNum("Mythz","Vorlauftemperatur_sHC1",0);
+my $vl_age = ReadingsAge("Mythz","Vorlauftemperatur_sHC1",99999);
+my $abtau = ReadingsNum("Mythz","Abtauen_Verdampfer_sGlobal",0);
+my $pv_lauf_aktiv = ((($heiz_voraus && $quelle eq "PV") || $pv_ok) && !$bezug_lang && !$defizit_lang) ? 1 : 0;
+my $laufart = !$verd_an ? "aus" : ($pv_lauf_aktiv ? "pv" : "komfort");
+my $vl_ziel = $vl_soll - $K_OFF;
+my $v_seit = ReadingsNum($DEV,"verd_an_seit",0);
+if($verd_an && !$v_seit)
+{
+$v_seit = int($now);
+fhem("setreading $DEV verd_an_seit $v_seit");
+}
+elsif(!$verd_an && $v_seit)
+{
+$v_seit = 0;
+fhem("setreading $DEV verd_an_seit 0");
+}
+my $v_lauf = $v_seit ? ($now - $v_seit) : 0;
+my $k_stop = 0;
+my $vs = ReadingsNum($DEV,"vl_ueber_seit",0);
+if($laufart eq "komfort" && $vl_soll > 0 && $vl_age < 300 && !$abtau && $vl_ist >= $vl_ziel + ($komfort_bedarf ? ReadingsNum($DEV,"komfort_vl_plus_k",2) : 0))
+{
+if(!$vs)
+{
+$vs = int($now);
+fhem("setreading $DEV vl_ueber_seit $vs");
+}
+$k_stop = 1 if(($now - $vs) >= $K_HALT && $v_lauf >= $K_MINLAUF);
+}
+elsif($vs)
+{
+fhem("setreading $DEV vl_ueber_seit 0");
+}
+my $k_pause_bis = ReadingsNum($DEV,"komfort_pause_bis",0);
+if($k_stop)
+{
+$k_pause_bis = int($now + $K_PAUSE);
+fhem("setreading $DEV komfort_pause_bis $k_pause_bis");
+fhem("setreading $DEV komfort_pause_bis_hr ".FmtDateTime($k_pause_bis));
+fhem("setreading $DEV vl_ueber_seit 0");
+}
+my $k_pause = ($now < $k_pause_bis) ? 1 : 0;
+fhem("setreading $DEV laufart $laufart");
+fhem("setreading $DEV vl_ziel ".sprintf("%.1f",$vl_ziel));
+fhem("setreading $DEV komfort_pause $k_pause");
+
+
+  my $neu_freigabe = $fr_state;
+  my $fr_grund = "";
+
+  if($k_stop)
+{
+$neu_freigabe = 0;
+$fr_grund = "komfort_vl_erreicht";
+}
+elsif($komfort_bedarf && !$k_pause && (!$nacht_k || $komfort_n >= ReadingsNum($DEV,"nacht_komfort_min_raeume",3)))
+{
+$neu_freigabe = 1;
+    $fr_grund = "komfort_pflicht"; fhem("setreading $DEV abschluss_seit 0") if(ReadingsNum($DEV,"abschluss_seit",0) > 0);
+  }
+  elsif($fr_state == 1)
+  {
+    if($runtime >= $MIN_LAUF)
+    {
+      if(!(($heiz_voraus && $vorauslade_bedarf) || $pv_raum_bedarf) || ($verd_an ? ($bezug_lang || $defizit_lang) : ($einspeis < $AUS_W)))
+      {
+        $neu_freigabe = 0;
+        if(!$verd_an) { $fr_grund = "aus_minlauf_erfuellt"; } else { my $abs = ReadingsNum($DEV,"abschluss_seit",0); if($abs <= 0) { $abs = int($now); fhem("setreading $DEV abschluss_seit $abs"); } if(($now - $abs) < ReadingsNum($DEV,"abschluss_s",300)) { $neu_freigabe = 1; $fr_grund = "abschluss_wartet"; } else { $fr_grund = "aus_minlauf_erfuellt"; fhem("setreading $DEV abschluss_seit 0"); } }
+      }
+      else
+      {
+        $fr_grund = "laeuft_weiter"; fhem("setreading $DEV abschluss_seit 0") if(ReadingsNum($DEV,"abschluss_seit",0) > 0);
+      }
+    }
+    else
+    {
+      $fr_grund = "minlauf_aktiv";
+    }
+  }
+  else
+  {
+    if($pv_raum_bedarf && $einspeis >= $EIN_W && $offtime >= $MIN_PAUSE)
+    {
+      $neu_freigabe = 1;
+      $fr_grund = "ein_pv_lauf";
+    }
+    elsif($heiz_voraus && $vorauslade_bedarf && $einspeis >= $EIN_W && $offtime >= $MIN_PAUSE)
+    {
+      $neu_freigabe = 1;
+      $fr_grund = "ein_vorausladen";
+    }
+    elsif($heiz_voraus && $vorauslade_bedarf && $quelle ne "PV" && $offtime >= $MIN_PAUSE && !$k_pause)
+    {
+      $neu_freigabe = 1;
+      $fr_grund = "ein_".$quelle;
+    }
+    else
+    {
+      $fr_grund = "bleibt_aus";
+    }
+  }
+
+  if($ueb)
+  {
+    $neu_freigabe = 1;
+    $fr_grund = "bw_hk_uebergabe";
+  }
+  if($neu_freigabe != $fr_state)
+  {
+    if($neu_freigabe == 1)
+    {
+      fhem("setreading $DEV freigabe_last_on ".int($now));
+    }
+    else
+    {
+      fhem("setreading $DEV freigabe_last_off ".int($now));
+    }
+    fhem("setreading $DEV freigabe_state $neu_freigabe");
+  }
+
+  my $sperre_soll = $neu_freigabe ? "off" : "on";
+  my $sperre_ist = ReadingsVal("Auto_Verdichtersperre","state","on");
+  if($sperre_soll ne $sperre_ist && !$sim
+    && !($ww_bedarf && $sperre_soll eq "on"))
+  {
+    fhem("set Auto_Verdichtersperre $sperre_soll");
+  }
+
+  my $runtime_min = int($runtime / 60);
+  my $offtime_min = int($offtime / 60);
+
+  fhem("setreading $DEV aussen ".sprintf("%.1f",$aussen));
+  fhem("setreading $DEV soc $soc");
+  fhem("setreading $DEV soc_reserve_noetig ".int($soc_reserve_noetig));
+  fhem("setreading $DEV soc_frei ".int($soc_frei));
+  fhem("setreading $DEV einspeis ".int($einspeis));
+  fhem("setreading $DEV nacht_bedarf_kwh ".sprintf("%.1f",$nacht_bedarf));
+  fhem("setreading $DEV pv_forecast_kwh ".sprintf("%.1f",$pv_forecast));
+  fhem("setreading $DEV idx_temp ".sprintf("%.1f",$idx_temp));
+  fhem("setreading $DEV idx_nacht ".sprintf("%.1f",$idx_nacht));
+  fhem("setreading $DEV idx_pvprog ".sprintf("%.1f",$idx_pvprog));
+  fhem("setreading $DEV heiz_sinn_index $index");
+  fhem("setreading $DEV quelle $quelle");
+  fhem("setreading $DEV heiz_voraus $heiz_voraus");
+  fhem("setreading $DEV akzept_netzbezug $akzept_netz");
+  fhem("setreading $DEV komfort_bedarf $komfort_bedarf");
+  fhem("setreading $DEV vorauslade_bedarf $vorauslade_bedarf");
+  fhem("setreading $DEV verdichter_freigabe $neu_freigabe");
+  fhem("setreading $DEV verdichter_sperre $sperre_soll");
+  fhem("setreading $DEV sim_modus_aktiv $sim");
+  fhem("setreading $DEV freigabe_grund $fr_grund");
+  fhem("setreading $DEV runtime_min $runtime_min");
+  fhem("setreading $DEV offtime_min $offtime_min");
+}
+)
